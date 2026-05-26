@@ -81,9 +81,42 @@
   .add-pair{width:100%;margin-top:2px;border-style:dashed;color:var(--muted)}
   .add-change.drag,.add-pair.drag{border-color:var(--accent);background:#eef2ff;color:var(--accent)}
 
+  .grip{cursor:grab;color:#94a3b8;font-size:15px;line-height:1;padding:2px 5px;user-select:none;border-radius:6px}
+  .grip:hover{background:#f1f5f9;color:var(--ink)}
+  .grip:active{cursor:grabbing}
+  .change.dragging,.pair.dragging{opacity:.45}
+  .change.drop-before,.pair.drop-before{box-shadow:0 -3px 0 var(--accent)}
+  .change.drop-after,.pair.drop-after{box-shadow:0 3px 0 var(--accent)}
+
+  .date-row{display:flex;align-items:center;gap:8px}
+  .date-row input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:var(--accent)}
+  .date-row input[type=text]{flex:1}
+  .doc-actions{display:flex;gap:8px}
+  .doc-actions button{flex:1}
+
   .preview{position:sticky;top:16px}
   .preview-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-  .bar-actions{display:flex;gap:8px}
+  .bar-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+  .dropdown{position:relative;display:inline-block}
+  .dropdown>button .caret{margin-left:6px;font-size:10px;opacity:.7}
+  .menu{
+    position:absolute;top:calc(100% + 6px);right:0;min-width:170px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 34px rgba(15,23,42,.18);
+    padding:6px;display:none;z-index:50;
+  }
+  .dropdown.open .menu{display:block}
+  .menu-head{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 8px 3px;font-weight:700}
+  .menu-head+.menu-item{margin-top:0}
+  .menu-item{display:block;width:100%;text-align:left;border:none;background:transparent;padding:7px 10px;border-radius:7px;font-weight:600;color:var(--ink);white-space:nowrap}
+  .menu-item:hover{background:#f1f5f9}
+
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);
+    background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:100;max-width:90vw;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .dims{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .canvas-wrap{
     background:
@@ -139,6 +172,27 @@
           </select>
         </div>
       </div>
+      <div class="field row">
+        <div>
+          <label for="layout">Layout</label>
+          <select id="layout">
+            <option value="side" selected>Side by side</option>
+            <option value="stacked">Stacked (before on top)</option>
+          </select>
+        </div>
+        <div>
+          <label for="dateText">Date / footer stamp</label>
+          <div class="date-row">
+            <input type="checkbox" id="dateEnabled" title="Show date / footer">
+            <input type="text" id="dateText" placeholder="e.g. May 26, 2026">
+          </div>
+        </div>
+      </div>
+      <div class="field doc-actions">
+        <button id="saveProject" title="Download an editable project file (images included)">💾 Save project</button>
+        <button id="openProject" title="Open a previously saved project file">📂 Open project</button>
+        <input type="file" id="openProjectInput" accept="application/json,.json" style="display:none">
+      </div>
     </div>
 
     <div id="changes"></div>
@@ -148,10 +202,7 @@
   <aside class="preview">
     <div class="preview-bar">
       <span id="dims" class="dims"></span>
-      <div class="bar-actions">
-        <button id="downloadSections" title="Download every section as a separate PNG">⬇ Each section</button>
-        <button id="download" class="primary">⬇ Download PNG</button>
-      </div>
+      <div class="bar-actions" id="barActions"></div>
     </div>
     <div class="canvas-wrap">
       <canvas id="preview"></canvas>
@@ -168,6 +219,7 @@
   const newSlot = () => ({ caption: "", img: null, dataUrl: null, w: 0, h: 0, _el: null });
   const newPair = () => ({ id: uid(), before: newSlot(), after: newSlot() });
   const newChange = () => ({ id: uid(), title: "", pairs: [newPair()] });
+  const todayStr = () => new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
   const state = {
     title: "",
@@ -175,6 +227,9 @@
     afterLabel: "AFTER",
     bg: "#ffffff",
     scale: 2,
+    layout: "side",
+    dateEnabled: false,
+    dateText: todayStr(),
     changes: [newChange()],
   };
 
@@ -184,10 +239,12 @@
   const STORE_KEY = "beforeafter:v1";
   let saveTimer = null;
 
-  function serialize() {
-    return JSON.stringify({
+  function snapshot() {
+    return {
+      v: 1,
       title: state.title, beforeLabel: state.beforeLabel, afterLabel: state.afterLabel,
-      bg: state.bg, scale: state.scale,
+      bg: state.bg, scale: state.scale, layout: state.layout,
+      dateEnabled: state.dateEnabled, dateText: state.dateText,
       changes: state.changes.map((ch) => ({
         title: ch.title,
         pairs: ch.pairs.map((p) => ({
@@ -195,8 +252,9 @@
           after: { caption: p.after.caption, dataUrl: p.after.dataUrl },
         })),
       })),
-    });
+    };
   }
+  const serialize = () => JSON.stringify(snapshot());
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -210,18 +268,16 @@
     s.dataUrl = d.dataUrl || null;
     return s;
   }
-  function loadSaved() {
-    let raw;
-    try { raw = sessionStorage.getItem(STORE_KEY); } catch (e) { return false; }
-    if (!raw) return false;
-    let d;
-    try { d = JSON.parse(raw); } catch (e) { return false; }
+  function applyState(d) {
     if (!d || !Array.isArray(d.changes)) return false;
     state.title = d.title || "";
     state.beforeLabel = d.beforeLabel != null ? d.beforeLabel : "BEFORE";
     state.afterLabel = d.afterLabel != null ? d.afterLabel : "AFTER";
     state.bg = d.bg || "#ffffff";
     state.scale = Number(d.scale) || 2;
+    state.layout = d.layout === "stacked" ? "stacked" : "side";
+    state.dateEnabled = !!d.dateEnabled;
+    state.dateText = d.dateText != null ? d.dateText : todayStr();
     state.changes = d.changes.map((ch) => ({
       id: uid(), title: ch.title || "",
       pairs: (ch.pairs || []).map((p) => ({
@@ -230,6 +286,17 @@
     }));
     if (!state.changes.length) state.changes = [newChange()];
     return true;
+  }
+  function loadSaved() {
+    let raw;
+    try { raw = sessionStorage.getItem(STORE_KEY); } catch (e) { return false; }
+    if (!raw) return false;
+    try { return applyState(JSON.parse(raw)); } catch (e) { return false; }
+  }
+  // Replace the whole document from a parsed project object, then refresh the UI.
+  function loadProject(d) {
+    if (!applyState(d)) { alert("That doesn't look like a valid project file."); return; }
+    syncControls(); buildEditor(); hydrateImages(); drawPreview();
   }
   function hydrateImages() {
     state.changes.forEach((ch) => ch.pairs.forEach((p) => {
@@ -248,12 +315,16 @@
     document.getElementById("afterLabel").value = state.afterLabel;
     document.getElementById("bg").value = state.bg;
     document.getElementById("scale").value = String(state.scale);
+    document.getElementById("layout").value = state.layout;
+    document.getElementById("dateEnabled").checked = state.dateEnabled;
+    document.getElementById("dateText").value = state.dateText;
   }
   function resetAll() {
     if (!confirm("Clear everything and start over? This can't be undone.")) return;
     try { sessionStorage.removeItem(STORE_KEY); } catch (e) {}
     state.title = ""; state.beforeLabel = "BEFORE"; state.afterLabel = "AFTER";
-    state.bg = "#ffffff"; state.scale = 2; state.changes = [newChange()];
+    state.bg = "#ffffff"; state.scale = 2; state.layout = "side";
+    state.dateEnabled = false; state.dateText = todayStr(); state.changes = [newChange()];
     syncControls(); buildEditor(); drawPreview();
   }
 
@@ -448,7 +519,8 @@
       h("div", { class: "tools" },
         h("button", { class: "ghost tiny", title: "Move up", onclick: () => move(-1) }, "↑"),
         h("button", { class: "ghost tiny", title: "Move down", onclick: () => move(1) }, "↓"),
-        h("button", { class: "ghost tiny", title: "Export just this change", onclick: () => exportChange(change) }, "⬇ PNG"),
+        dropdown("⧉ Copy", "ghost tiny", [{ items: copyItems(() => "", () => [change]) }]),
+        dropdown("⬇ Download", "ghost tiny", [{ items: downloadItems(() => slug(change.title || "change"), () => "", () => [change]) }]),
         state.changes.length > 1
           ? h("button", { class: "ghost tiny", title: "Delete change", onclick: () => { state.changes.splice(ci, 1); buildEditor(); drawPreview(); } }, "✕")
           : null,
@@ -515,30 +587,32 @@
     PAD: 48, TITLE: 52, CHANGE: 34, LABEL: 22, CAP: 19,
     cellW: 560, pairGap: 36, rowGap: 40, changeGap: 60, titleGap: 40,
     ctitleGap: 24, labelGap: 14, capGap: 14, maxImgH: 680, lh: 1.3, radius: 10,
+    stackGap: 28,
   };
 
-  function blockLayout(slot, labelText, bg, fg, x, y, items) {
+  // Lay out one before/after image into a column `cw` wide, anchored at (x, y). Returns its height.
+  function blockLayout(slot, labelText, bg, fg, x, y, cw, items) {
     let iw, ih;
     if (slot.img && slot.w && slot.h) {
-      let s = C.cellW / slot.w;
+      let s = cw / slot.w;
       if (slot.h * s > C.maxImgH) s = C.maxImgH / slot.h;
       iw = slot.w * s; ih = slot.h * s;
-    } else { iw = C.cellW; ih = Math.round(C.cellW * 0.6); }
-    const ix = x + (C.cellW - iw) / 2;
+    } else { iw = cw; ih = Math.round(cw * 0.6); }
+    const ix = x + (cw - iw) / 2;
 
     meas.font = font(700, C.LABEL);
     const tw = meas.measureText(labelText).width;
     const badgeH = C.LABEL + 16, badgeW = tw + 28;
 
     let cy = y;
-    items.push({ kind: "badge", cx: x + C.cellW / 2, y: cy, w: badgeW, h: badgeH, text: labelText, size: C.LABEL, bg, fg });
+    items.push({ kind: "badge", cx: x + cw / 2, y: cy, w: badgeW, h: badgeH, text: labelText, size: C.LABEL, bg, fg });
     cy += badgeH + C.labelGap;
     items.push({ kind: "image", img: slot.img, x: ix, y: cy, w: iw, h: ih });
     cy += ih;
     if ((slot.caption || "").trim()) {
       cy += C.capGap;
-      const lines = wrap(slot.caption, font(400, C.CAP), C.cellW);
-      items.push({ kind: "text", lines, x: x + C.cellW / 2, y: cy, size: C.CAP, weight: 400, color: "#475569", align: "center" });
+      const lines = wrap(slot.caption, font(400, C.CAP), cw);
+      items.push({ kind: "text", lines, x: x + cw / 2, y: cy, size: C.CAP, weight: 400, color: "#475569", align: "center" });
       cy += lines.length * C.CAP * C.lh;
     }
     return cy - y;
@@ -547,6 +621,7 @@
   function computeLayout(title, changes) {
     const contentW = C.cellW * 2 + C.pairGap;
     const W = contentW + C.PAD * 2;
+    const bLabel = state.beforeLabel || "BEFORE", aLabel = state.afterLabel || "AFTER";
     const items = [];
     let y = C.PAD;
 
@@ -567,11 +642,25 @@
       }
       ch.pairs.forEach((p, pi) => {
         if (pi > 0) y += C.rowGap;
-        const bh = blockLayout(p.before, state.beforeLabel || "BEFORE", "#fee2e2", "#b91c1c", C.PAD, y, items);
-        const ah = blockLayout(p.after, state.afterLabel || "AFTER", "#dcfce7", "#15803d", C.PAD + C.cellW + C.pairGap, y, items);
-        y += Math.max(bh, ah);
+        if (state.layout === "stacked") {
+          const bh = blockLayout(p.before, bLabel, "#fee2e2", "#b91c1c", C.PAD, y, contentW, items);
+          y += bh + C.stackGap;
+          const ah = blockLayout(p.after, aLabel, "#dcfce7", "#15803d", C.PAD, y, contentW, items);
+          y += ah;
+        } else {
+          const bh = blockLayout(p.before, bLabel, "#fee2e2", "#b91c1c", C.PAD, y, C.cellW, items);
+          const ah = blockLayout(p.after, aLabel, "#dcfce7", "#15803d", C.PAD + C.cellW + C.pairGap, y, C.cellW, items);
+          y += Math.max(bh, ah);
+        }
       });
     });
+
+    if (state.dateEnabled && (state.dateText || "").trim()) {
+      y += C.changeGap / 2;
+      const lines = wrap(state.dateText, font(500, 20), contentW);
+      items.push({ kind: "text", lines, x: C.PAD + contentW, y, size: 20, weight: 500, color: "#94a3b8", align: "right" });
+      y += lines.length * 20 * C.lh;
+    }
 
     if (!items.length) {
       items.push({ kind: "text", lines: ["Add a title and screenshots to build your preview"], x: W / 2, y: C.PAD, size: 22, weight: 500, color: "#94a3b8", align: "center" });
@@ -645,29 +734,148 @@
   function slug(s) {
     return (String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "before-after";
   }
-  function download(canvas, name) {
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = h("a", { href: url, download: name });
-      document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, "image/png");
+  const RASTER = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
+  const EXT = { png: "png", jpeg: "jpg", webp: "webp", svg: "svg" };
+
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = h("a", { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function exportChange(change) {
+  let toastTimer = null;
+  function toast(msg) {
+    let t = document.getElementById("toast");
+    if (!t) { t = h("div", { id: "toast", class: "toast" }); document.body.append(t); }
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1700);
+  }
+  function toCanvas(title, changes) {
     const tmp = document.createElement("canvas");
-    renderModel(tmp, "", [change]);
-    download(tmp, slug(change.title || "change") + ".png");
+    renderModel(tmp, title, changes);
+    return tmp;
   }
-  function downloadSections() {
+  const blobFromCanvas = (canvas, mime, q) =>
+    new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob failed"))), mime, q));
+
+  function exportDownload(title, changes, fmt, name) {
+    if (fmt === "svg") {
+      downloadBlob(new Blob([buildSVG(title, changes)], { type: "image/svg+xml" }), `${name}.svg`);
+      return;
+    }
+    blobFromCanvas(toCanvas(title, changes), RASTER[fmt], fmt === "png" ? undefined : 0.92)
+      .then((b) => downloadBlob(b, `${name}.${EXT[fmt]}`));
+  }
+  async function exportCopy(title, changes, fmt) {
+    try {
+      if (fmt === "svg") { await navigator.clipboard.writeText(buildSVG(title, changes)); toast("Copied SVG markup"); return; }
+      const blob = await blobFromCanvas(toCanvas(title, changes), RASTER[fmt], fmt === "png" ? undefined : 0.92);
+      await navigator.clipboard.write([new ClipboardItem({ [RASTER[fmt]]: blob })]);
+      toast(`Copied ${fmt.toUpperCase()} to clipboard`);
+    } catch (e) {
+      toast(fmt === "png" ? "Copy failed" : "Copy failed — browser may only allow PNG");
+    }
+  }
+  function downloadAllSections(fmt) {
     if (!state.changes.length) return;
-    // Stagger downloads so the browser doesn't drop all-but-one of the saves.
+    // Stagger so the browser doesn't drop all-but-one of the saves.
     state.changes.forEach((ch, i) => {
-      setTimeout(() => {
-        const tmp = document.createElement("canvas");
-        renderModel(tmp, "", [ch]);
-        download(tmp, `${i + 1}-${slug(ch.title || "change")}.png`);
-      }, i * 350);
+      setTimeout(() => exportDownload("", [ch], fmt, `${i + 1}-${slug(ch.title || "change")}`), i * 350);
     });
+  }
+
+  // ---- SVG export (reuses the same layout; vector text, embedded raster images) ----
+  const svgEsc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function buildSVG(title, changes) {
+    const { W, H, items } = computeLayout(title, changes);
+    const fam = FAMILY.replace(/"/g, "'");
+    const out = [
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
+      `<rect width="${W}" height="${H}" fill="${state.bg}"/>`,
+    ];
+    let clip = 0;
+    for (const it of items) {
+      if (it.kind === "text") {
+        const anchor = it.align === "center" ? "middle" : it.align === "right" ? "end" : "start";
+        const lh = it.size * C.lh;
+        it.lines.forEach((ln, i) => out.push(
+          `<text x="${it.x}" y="${it.y + i * lh}" font-family="${fam}" font-size="${it.size}" font-weight="${it.weight}" fill="${it.color}" text-anchor="${anchor}" dominant-baseline="text-before-edge">${svgEsc(ln)}</text>`));
+      } else if (it.kind === "line") {
+        out.push(`<line x1="${it.x1}" y1="${it.y}" x2="${it.x2}" y2="${it.y}" stroke="${it.color}" stroke-width="${it.width}"/>`);
+      } else if (it.kind === "badge") {
+        out.push(`<rect x="${it.cx - it.w / 2}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${it.h / 2}" fill="${it.bg}"/>`);
+        out.push(`<text x="${it.cx}" y="${it.y + it.h / 2}" font-family="${fam}" font-size="${it.size}" font-weight="700" fill="${it.fg}" text-anchor="middle" dominant-baseline="central">${svgEsc(it.text)}</text>`);
+      } else if (it.kind === "image" && it.img && it.img.src) {
+        const id = `c${clip++}`;
+        out.push(`<clipPath id="${id}"><rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${C.radius}"/></clipPath>`);
+        out.push(`<image x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" preserveAspectRatio="none" clip-path="url(#${id})" xlink:href="${it.img.src}"/>`);
+        out.push(`<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${C.radius}" fill="none" stroke="rgba(15,23,42,0.12)" stroke-width="1.5"/>`);
+      } else if (it.kind === "image") {
+        out.push(`<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" rx="${C.radius}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8 6"/>`);
+        out.push(`<text x="${it.x + it.w / 2}" y="${it.y + it.h / 2}" font-family="${fam}" font-size="18" font-weight="500" fill="#94a3b8" text-anchor="middle" dominant-baseline="central">No image</text>`);
+      }
+    }
+    out.push("</svg>");
+    return out.join("");
+  }
+
+  // ---- project save / open (.json, images included) ----
+  function saveProject() {
+    const blob = new Blob([JSON.stringify(snapshot())], { type: "application/json" });
+    downloadBlob(blob, slug(state.title) + ".beforeafter.json");
+  }
+  function openProjectFile(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { try { loadProject(JSON.parse(r.result)); } catch (e) { alert("Couldn't read that project file."); } };
+    r.readAsText(file);
+  }
+
+  // ---------- dropdown menus ----------
+  let openMenu = null;
+  function closeMenu() { if (openMenu) { openMenu.classList.remove("open"); openMenu = null; } }
+  document.addEventListener("click", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); });
+
+  // groups: [{ label?, items: [{ label, onClick }] }]
+  function dropdown(label, btnClass, groups) {
+    const menu = h("div", { class: "menu" });
+    groups.forEach((g) => {
+      if (g.label) menu.append(h("div", { class: "menu-head" }, g.label));
+      g.items.forEach((it) => menu.append(h("button", {
+        class: "menu-item",
+        onclick: (e) => { e.stopPropagation(); closeMenu(); it.onClick(); },
+      }, it.label)));
+    });
+    const wrap = h("div", { class: "dropdown" });
+    const btn = h("button", {
+      class: btnClass || undefined,
+      onclick: (e) => {
+        e.stopPropagation();
+        const wasOpen = wrap.classList.contains("open");
+        closeMenu();
+        if (!wasOpen) { wrap.classList.add("open"); openMenu = wrap; }
+      },
+    }, label, h("span", { class: "caret" }, "▾"));
+    wrap.append(btn, menu);
+    return wrap;
+  }
+
+  const DL_FORMATS = [["png", "PNG"], ["jpeg", "JPEG"], ["webp", "WebP"], ["svg", "SVG"]];
+  const COPY_FORMATS = [["png", "PNG"], ["jpeg", "JPEG"], ["webp", "WebP"], ["svg", "SVG markup"]];
+  const downloadItems = (getName, getTitle, getChanges) =>
+    DL_FORMATS.map(([f, l]) => ({ label: l, onClick: () => exportDownload(getTitle(), getChanges(), f, getName()) }));
+  const copyItems = (getTitle, getChanges) =>
+    COPY_FORMATS.map(([f, l]) => ({ label: l, onClick: () => exportCopy(getTitle(), getChanges(), f) }));
+
+  function buildBarActions() {
+    const bar = document.getElementById("barActions");
+    bar.innerHTML = "";
+    bar.append(
+      dropdown("⧉ Copy", "", [{ items: copyItems(() => state.title, () => state.changes) }]),
+      dropdown("⬇ Each section", "", [{ items: DL_FORMATS.map(([f, l]) => ({ label: l, onClick: () => downloadAllSections(f) })) }]),
+      dropdown("⬇ Download", "primary", [{ items: downloadItems(() => slug(state.title), () => state.title, () => state.changes) }]),
+    );
   }
 
   // ---------- global controls ----------
@@ -677,6 +885,9 @@
   bind("afterLabel", (e) => { state.afterLabel = e.target.value; updateColTags(); drawPreview(); });
   bind("bg", (e) => { state.bg = e.target.value; drawPreview(); });
   bind("scale", (e) => { state.scale = Number(e.target.value); drawPreview(); });
+  bind("layout", (e) => { state.layout = e.target.value; drawPreview(); });
+  document.getElementById("dateEnabled").addEventListener("change", (e) => { state.dateEnabled = e.target.checked; drawPreview(); });
+  bind("dateText", (e) => { state.dateText = e.target.value; drawPreview(); });
   const addChangeBtn = document.getElementById("addChange");
   addChangeBtn.addEventListener("click", () => { state.changes.push(newChange()); buildEditor(); drawPreview(); });
   addChangeBtn.addEventListener("dragover", (e) => { e.preventDefault(); addChangeBtn.classList.add("drag"); });
@@ -686,9 +897,11 @@
     const files = imageFiles(e.dataTransfer.files);
     if (files.length) dropAddChange(files);
   });
-  document.getElementById("download").addEventListener("click", () => download(previewCanvas, slug(state.title) + ".png"));
-  document.getElementById("downloadSections").addEventListener("click", downloadSections);
   document.getElementById("reset").addEventListener("click", resetAll);
+  document.getElementById("saveProject").addEventListener("click", saveProject);
+  const openInput = document.getElementById("openProjectInput");
+  document.getElementById("openProject").addEventListener("click", () => openInput.click());
+  openInput.addEventListener("change", (e) => { openProjectFile(e.target.files[0]); e.target.value = ""; });
 
   function updateColTags() {
     document.querySelectorAll(".img-col.before .col-tag").forEach((e) => e.textContent = state.beforeLabel || "Before");
@@ -698,6 +911,7 @@
   // ---------- init ----------
   const restored = loadSaved();
   syncControls();
+  buildBarActions();
   buildEditor();
   if (restored) hydrateImages();
   drawPreview();
