@@ -158,7 +158,7 @@
   .linkish{border:none;background:transparent;color:var(--accent);font-weight:700;padding:0;text-decoration:underline}
   .anno-editor{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
   .anno-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
-  .anno-input{position:absolute;z-index:5;box-sizing:border-box;border:none;border-radius:14px;padding:5px 11px;font-weight:700;font-family:inherit;line-height:1.2;color:#fff;outline:2px solid #fff;box-shadow:0 0 0 4px rgba(79,70,229,.5);width:auto;min-width:50px;resize:none;overflow:hidden;white-space:pre-wrap}
+  .anno-input{position:absolute;z-index:5;box-sizing:border-box;border:none;border-radius:14px;font-weight:700;font-family:inherit;line-height:1.2;color:#fff;outline:2px solid #fff;box-shadow:0 0 0 4px rgba(79,70,229,.5);width:auto;min-width:50px;resize:none;overflow:auto;white-space:pre}
   .modal-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
   .modal-hint{color:var(--muted);font-size:12px}
   .dims{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -1843,15 +1843,24 @@
   function positionTextInput(a) {
     const inp = editorHost.input, cv = editorHost.canvas, k = annoImgRect.w / 560, st = resolveTextStyle(a);
     const left = cv.offsetLeft + N2DX(a.x), top = cv.offsetTop + N2DY(a.y);
+    const displaySize = Math.max(15, st.size * k);
+    const padX = displaySize * 10 / 22, padY = displaySize * 6 / 22, lineH = displaySize * 1.2;
+    const lines = String(inp.value || " ").split("\n");
+    meas.font = font(700, displaySize);
+    const textW = Math.max(1, ...lines.map((ln) => meas.measureText(ln || " ").width));
+    const wantedW = Math.ceil(textW + padX * 2 + 2);
+    const wantedH = Math.ceil(lines.length * lineH + padY * 2 + 2);
+    const maxW = Math.max(60, cv.offsetLeft + cv.offsetWidth - left - 6);
     inp.style.left = left + "px";
     inp.style.top = top + "px";
-    inp.style.fontSize = Math.max(15, st.size * k) + "px";
+    inp.style.fontSize = displaySize + "px";
+    inp.style.lineHeight = "1.2";
+    inp.style.padding = `${padY}px ${padX}px`;
+    inp.style.width = Math.max(50, Math.min(wantedW, maxW)) + "px";
+    inp.style.height = wantedH + "px";
     inp.style.color = st.fg;
     if (st.hasBg) { inp.style.background = st.bg; inp.style.borderRadius = "14px"; inp.style.textShadow = "none"; }
     else { const hl = rgbaOf(st.haloColor, st.haloOpacity); inp.style.background = "transparent"; inp.style.borderRadius = "6px"; inp.style.textShadow = `0 0 3px ${hl},0 0 3px ${hl}`; }
-    // keep the field from overflowing the canvas (which would scroll the whole modal)
-    inp.style.maxWidth = Math.max(60, cv.offsetLeft + cv.offsetWidth - left - 6) + "px";
-    inp.style.height = "auto"; inp.style.height = inp.scrollHeight + "px";   // grow with newlines
   }
   function startTextEdit(i, isNew) {
     annoTextEdit = { i, isNew };
@@ -2015,7 +2024,7 @@
   // handlers which read/write the active `editorHost`. Used by both the modal and the inline tab.
   function makeEditorUI() {
     const canvas = h("canvas", { class: "anno-canvas" });
-    const input = h("textarea", { class: "anno-input", rows: "1", style: "display:none" });
+    const input = h("textarea", { class: "anno-input", rows: "1", wrap: "off", style: "display:none" });
     input.addEventListener("keydown", (e) => {
       e.stopPropagation();   // Enter commits; Shift+Enter adds a newline; Escape cancels
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitTextEdit(); }
