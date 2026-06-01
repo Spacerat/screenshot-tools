@@ -136,10 +136,10 @@
   .tool.active .kbd{background:rgba(255,255,255,.25);color:#fff}
   .swatch{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
   .swatch.active{box-shadow:0 0 0 2px var(--accent)}
-  .text-pop{position:absolute;top:12px;left:12px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.22);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
-  .tp-row{display:flex;align-items:center;gap:9px}
-  .tp-row .lbl{font-size:12px;font-weight:700;color:var(--muted);width:42px}
-  .tp-swatches{display:flex;align-items:center;gap:6px}
+  .text-pop{position:absolute;top:12px;left:12px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.22);padding:12px;display:flex;flex-direction:column;gap:8px}
+  .tp-row{display:flex;align-items:center;gap:9px;min-height:30px}
+  .tp-row .lbl{font-size:12px;font-weight:700;color:var(--muted);width:82px;line-height:1}
+  .tp-swatches{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .chip{padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer}
   .chip:hover{background:#f8fafc}
   .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -1351,26 +1351,18 @@
     if (c.length === 3) c = c.split("").map((x) => x + x).join("");
     return `rgba(${parseInt(c.slice(0, 2), 16) || 0},${parseInt(c.slice(2, 4), 16) || 0},${parseInt(c.slice(4, 6), 16) || 0},${a})`;
   }
-  // normalize to a 6-digit lowercase hex (no #) for comparison
-  const normHex = (hex) => { let c = String(hex || "").replace("#", "").toLowerCase(); if (c.length === 3) c = c.split("").map((x) => x + x).join(""); return c; };
-  const sameColor = (a, b) => normHex(a) === normHex(b);
-  // shift a color toward black (f<0) or white (f>0), |f| in 0..1, for a distinguishable shade
-  function shade(hex, f) {
-    const c = normHex(hex), hx = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
-    const adj = (v) => f < 0 ? v * (1 + f) : v + (255 - v) * f;
-    return "#" + hx(adj(parseInt(c.slice(0, 2), 16) || 0)) + hx(adj(parseInt(c.slice(2, 4), 16) || 0)) + hx(adj(parseInt(c.slice(4, 6), 16) || 0));
-  }
-  // resolve a text label's display style. size: 560-space px (default 22). bg: color or "none".
-  // fg: color or "auto" (contrasts the bg, or near-black on no bg). No bg → a contrasting halo
-  // keeps text legible on any image (applies to explicit fg too, not just auto).
+  const lineWidthValue = (w) => w === "small" ? 2 : w === "large" ? 7 : 4;
+  const lineDash = (style, sw) => style === "dashed" ? [sw * 3, sw * 2] : style === "dotted" ? [sw * 0.1, sw * 2] : [];
+
+  // resolve a text label's display style from a single color plus background toggle.
+  // No background uses the halo treatment; background on uses the color as fill and white text
+  // unless the fill is white, where dark text is more legible. Old fg/bg fields are normalized here.
   function resolveTextStyle(a) {
     const size = a.size || 22;
-    const bg = a.bg !== undefined ? a.bg : (a.color || "#ef4444");
-    const hasBg = !!bg && bg !== "none";
-    let fg = a.fg !== undefined ? a.fg : "auto";
-    if (fg === "auto") fg = hasBg ? (hexLum(bg) > 0.6 ? "#111827" : "#ffffff") : "#111827";
-    // same color for text and its background → shade the text so it stays legible
-    if (hasBg && sameColor(fg, bg)) fg = hexLum(bg) > 0.5 ? shade(bg, -0.55) : shade(bg, 0.6);
+    const hasBg = a.bgOn !== undefined ? !!a.bgOn : !!(a.bg && a.bg !== "none");
+    const color = a.color || (hasBg ? a.bg : (a.fg && a.fg !== "auto" ? a.fg : "#ef4444"));
+    const bg = hasBg ? color : "none";
+    const fg = hasBg ? (hexLum(color) > 0.97 ? "#111827" : "#ffffff") : color;
     const light = hexLum(fg) > 0.72;   // only near-white text needs a dark halo; colored text reads better with a white glow
     return { size, bg, fg, hasBg, halo: !hasBg, haloColor: light ? "#000000" : "#ffffff", haloOpacity: light ? 0.5 : 0.85 };
   }
@@ -1379,18 +1371,20 @@
   function annoPrimitives(rect, a) {
     const k = rect.w / 560;   // sizes scale purely with the image (no min clamps) so the editor matches output at any zoom
     const col = a.color || "#ef4444";
-    const sw = 4 * k;
+    const baseLineW = lineWidthValue(a.lineWidth);
+    const sw = baseLineW * k;
+    const dash = lineDash(a.lineStyle, sw);
     const X = (n) => rect.x + n * rect.w, Y = (n) => rect.y + n * rect.h;
     if (a.type === "box") {
-      return [{ k: "rect", x: X(a.x), y: Y(a.y), w: a.w * rect.w, h: a.h * rect.h, stroke: col, sw }];
+      return [{ k: "rect", x: X(a.x), y: Y(a.y), w: a.w * rect.w, h: a.h * rect.h, stroke: col, sw, dash }];
     }
     if (a.type === "arrow") {
       const x1 = X(a.x1), y1 = Y(a.y1), x2 = X(a.x2), y2 = Y(a.y2);
-      const ang = Math.atan2(y2 - y1, x2 - x1), hl = 18 * k;
+      const ang = Math.atan2(y2 - y1, x2 - x1), hl = (10 + baseLineW * 2) * k;
       const len = Math.hypot(x2 - x1, y2 - y1) || 1, cut = Math.min(hl * 0.9, len * 0.6);
       const bx = x2 - Math.cos(ang) * cut, by = y2 - Math.sin(ang) * cut;  // stop the line at the arrowhead base
       return [
-        { k: "line", x1, y1, x2: bx, y2: by, stroke: col, sw },
+        { k: "line", x1, y1, x2: bx, y2: by, stroke: col, sw, dash },
         { k: "poly", pts: [[x2, y2], [x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45)], [x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45)]], fill: col },
       ];
     }
@@ -1411,8 +1405,8 @@
     return [];
   }
   function drawPrim(ctx, p) {
-    if (p.k === "rect") { ctx.lineWidth = p.sw; ctx.strokeStyle = p.stroke; ctx.strokeRect(p.x, p.y, p.w, p.h); }
-    else if (p.k === "line") { ctx.lineWidth = p.sw; ctx.strokeStyle = p.stroke; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.stroke(); ctx.lineCap = "butt"; }
+    if (p.k === "rect") { ctx.save(); ctx.lineWidth = p.sw; ctx.strokeStyle = p.stroke; ctx.lineCap = "round"; ctx.setLineDash(p.dash || []); ctx.strokeRect(p.x, p.y, p.w, p.h); ctx.restore(); }
+    else if (p.k === "line") { ctx.save(); ctx.lineWidth = p.sw; ctx.strokeStyle = p.stroke; ctx.lineCap = "round"; ctx.setLineDash(p.dash || []); ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.stroke(); ctx.restore(); }
     else if (p.k === "poly") { ctx.fillStyle = p.fill; ctx.beginPath(); p.pts.forEach((pt, i) => (i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]))); ctx.closePath(); ctx.fill(); }
     else if (p.k === "circle") { ctx.fillStyle = p.fill; ctx.beginPath(); ctx.arc(p.cx, p.cy, p.r, 0, Math.PI * 2); ctx.fill(); }
     else if (p.k === "pill") { if (!p.noFill) { rr(ctx, p.x, p.y, p.w, p.h, p.h / 2); ctx.fillStyle = p.fill; ctx.fill(); } }
@@ -1427,8 +1421,9 @@
     }
   }
   function svgPrim(p) {
-    if (p.k === "rect") return `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="none" stroke="${p.stroke}" stroke-width="${p.sw}"/>`;
-    if (p.k === "line") return `<line x1="${p.x1}" y1="${p.y1}" x2="${p.x2}" y2="${p.y2}" stroke="${p.stroke}" stroke-width="${p.sw}" stroke-linecap="round"/>`;
+    const dash = (p.dash && p.dash.length) ? ` stroke-dasharray="${p.dash.join(" ")}"` : "";
+    if (p.k === "rect") return `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="none" stroke="${p.stroke}" stroke-width="${p.sw}"${dash}/>`;
+    if (p.k === "line") return `<line x1="${p.x1}" y1="${p.y1}" x2="${p.x2}" y2="${p.y2}" stroke="${p.stroke}" stroke-width="${p.sw}" stroke-linecap="round"${dash}/>`;
     if (p.k === "poly") return `<polygon points="${p.pts.map((pt) => pt.join(",")).join(" ")}" fill="${p.fill}"/>`;
     if (p.k === "circle") return `<circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" fill="${p.fill}"/>`;
     if (p.k === "pill") return p.noFill ? "" : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.h / 2}" fill="${p.fill}"/>`;
@@ -1586,7 +1581,8 @@
   const annoDoc = newSlot();                                  // the Annotator tab's single image
   let annoSlot = null, annoBtnRef = null;
   let annoWork = [], annoTool = "select", annoColor = "#ef4444";
-  let annoTextBg = "none";   // default background for new text labels (foreground shares annoColor)
+  let annoTextBgOn = false;
+  let annoLineStyle = "solid", annoLineWidth = "medium";
   let annoStampStyle = "numbers";
   let annoStampSize = 20;
   let annoSel = new Set();          // selected indices
@@ -1671,11 +1667,23 @@
     m.delBtn.disabled = annoSel.size === 0;
   }
   function updateColors() { editorHost && editorHost.swatchEls.forEach((s) => s.classList.toggle("active", s._c === annoColor)); }
-  // fg/bg shown in the Text/Fill controls: a single selected label's own values, else the new-label defaults
-  function curTextStyle() {
-    const texts = selArr().map((i) => annoWork[i]).filter((a) => a && a.type === "text");
-    if (texts.length === 1) { const a = texts[0]; return { fg: a.fg !== undefined ? a.fg : "auto", bg: a.bg !== undefined ? a.bg : (a.color || "#ef4444") }; }
-    return { fg: annoColor, bg: annoTextBg };
+  const selectedAnns = (types) => selArr().map((i) => annoWork[i]).filter((a) => a && types.includes(a.type));
+  const selectedLineAnns = () => selectedAnns(["box", "arrow"]);
+  const selectedTextAnns = () => selectedAnns(["text"]);
+  function curTextBgOn() {
+    const texts = selectedTextAnns();
+    if (texts.length === 1) return texts[0].bgOn !== undefined ? !!texts[0].bgOn : !!(texts[0].bg && texts[0].bg !== "none");
+    return annoTextBgOn;
+  }
+  function curLineStyle() {
+    const lines = selectedLineAnns();
+    if (lines.length === 1) return lines[0].lineStyle || "solid";
+    return annoLineStyle;
+  }
+  function curLineWidth() {
+    const lines = selectedLineAnns();
+    if (lines.length === 1) return lines[0].lineWidth || "medium";
+    return annoLineWidth;
   }
   function curStampStyle() {
     return annoStampStyle;
@@ -1686,31 +1694,51 @@
     if (stamps.length) { stamps.forEach((a) => (a.style = style)); pushHistory(); }
     updateTextProps(); redraw();
   }
+  function applyColor(c) {
+    annoColor = c;
+    const idx = selArr().filter((i) => annoWork[i]);
+    if (idx.length) { idx.forEach((i) => { annoWork[i].color = c; }); pushHistory(); }
+    updateTextProps(); redraw();
+  }
+  function applyTextBg(on) {
+    annoTextBgOn = on;
+    const texts = selectedTextAnns();
+    if (texts.length) { texts.forEach((a) => { a.bgOn = on; delete a.bg; delete a.fg; }); pushHistory(); }
+    updateTextProps(); redraw();
+  }
+  function applyLineStyle(style) {
+    annoLineStyle = style;
+    const lines = selectedLineAnns();
+    if (lines.length) { lines.forEach((a) => (a.lineStyle = style)); pushHistory(); }
+    updateTextProps(); redraw();
+  }
+  function applyLineWidth(width) {
+    annoLineWidth = width;
+    const lines = selectedLineAnns();
+    if (lines.length) { lines.forEach((a) => (a.lineWidth = width)); pushHistory(); }
+    updateTextProps(); redraw();
+  }
   // brush config is shown when a drawing tool is active or an annotation is selected
   function updateTextProps() {
     const m = editorHost; if (!m || !m.textPop) return;
     const show = annoTool !== "select" || annoSel.size > 0;   // hide the floating palette while idly selecting
-    m.textPop.style.display = show ? "block" : "none";
+    m.textPop.style.display = show ? "flex" : "none";
     if (!show) return;
     const textCtx = annoTool === "text" || selArr().some((i) => annoWork[i] && annoWork[i].type === "text");
     const stampCtx = annoTool === "number" || selArr().some((i) => annoWork[i] && annoWork[i].type === "number");
-    m.globalRow.style.display = textCtx ? "none" : "flex";   // global palette for shapes...
-    m.fgRow.style.display = m.bgRow.style.display = textCtx ? "flex" : "none";   // ...or Text/Fill for labels
+    const lineCtx = annoTool === "box" || annoTool === "arrow" || selArr().some((i) => annoWork[i] && (annoWork[i].type === "box" || annoWork[i].type === "arrow"));
+    m.globalRow.style.display = "flex";
+    m.textBgRow.style.display = textCtx ? "flex" : "none";
     m.stampRow.style.display = stampCtx ? "flex" : "none";
+    m.lineStyleRow.style.display = lineCtx ? "flex" : "none";
+    m.lineWidthRow.style.display = lineCtx ? "flex" : "none";
     updateColors();
     if (stampCtx) m.stampChips.forEach((s) => s.classList.toggle("active", s._style === curStampStyle()));
-    if (textCtx) {
-      const cur = curTextStyle();
-      m.fgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.fg));
-      m.bgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.bg));
+    if (textCtx) m.textBgChips.forEach((s) => s.classList.toggle("active", s._on === curTextBgOn()));
+    if (lineCtx) {
+      m.lineStyleChips.forEach((s) => s.classList.toggle("active", s._style === curLineStyle()));
+      m.lineWidthChips.forEach((s) => s.classList.toggle("active", s._width === curLineWidth()));
     }
-  }
-  function applyText(prop, c) {
-    if (prop === "fg") { if (c !== "auto") annoColor = c; }   // foreground shares the global color; "auto" is label-only
-    else annoTextBg = c;
-    const idx = selArr().filter((i) => annoWork[i] && annoWork[i].type === "text");
-    if (idx.length) { idx.forEach((i) => (annoWork[i][prop] = c)); pushHistory(); }
-    updateTextProps(); redraw();
   }
   function updateUndoRedo() {
     const m = editorHost; if (!m) return;
@@ -1762,9 +1790,13 @@
     ctx.strokeStyle = "rgba(15,23,42,.25)"; ctx.lineWidth = 1;
     ctx.strokeRect(annoImgRect.x + 0.5, annoImgRect.y + 0.5, annoImgRect.w - 1, annoImgRect.h - 1);
     const byId = buildById(annoWork);
-    drawOrder(annoWork).forEach((i) => annoPrimitives(annoImgRect, resolveForRender(annoWork[i], byId)).forEach((p) => drawPrim(ctx, p)));
+    drawOrder(annoWork).forEach((i) => {
+      if (annoTextEdit && annoTextEdit.i === i) return;
+      annoPrimitives(annoImgRect, resolveForRender(annoWork[i], byId)).forEach((p) => drawPrim(ctx, p));
+    });
     if (annoDraft) annoPrimitives(annoImgRect, annoDraft).forEach((p) => drawPrim(ctx, p));
     annoSel.forEach((i) => {
+      if (annoTextEdit && annoTextEdit.i === i) return;
       const a = annoWork[i]; if (!a) return;
       const bb = primsBBox(annoPrimitives(annoImgRect, resolveForRender(a, byId))), pad = 4;
       ctx.save(); ctx.strokeStyle = "#4f46e5"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
@@ -1852,11 +1884,11 @@
       annoAction = { kind: "endpoint", end: hd.end, i: selArr()[0] };
     } else if (hd.kind === "mkText") {
       const e = resolveArrowEnds(a, buildById(annoWork));
-      const t = { id: uid(), type: "text", x: e.x1, y: e.y1, text: "", size: 22, bg: annoTextBg, fg: annoColor };
+      const t = { id: uid(), type: "text", x: e.x1, y: e.y1, text: "", size: 22, color: annoColor, bgOn: annoTextBgOn };
       annoWork.push(t); a.fromRef = t.id;
       setSel([annoWork.length - 1]); startTextEdit(annoWork.length - 1, true);
     } else if (hd.kind === "mkArrow") {
-      const arr = { id: uid(), type: "arrow", x1: nx, y1: ny, x2: nx, y2: ny, color: annoColor };
+      const arr = { id: uid(), type: "arrow", x1: nx, y1: ny, x2: nx, y2: ny, color: annoColor, lineStyle: annoLineStyle, lineWidth: annoLineWidth };
       if (a.type === "text") { arr.fromRef = a.id; annoAction = { kind: "arrowHandle", i: annoWork.length, end: 2 }; }
       else { arr.toRef = a.id; annoAction = { kind: "arrowHandle", i: annoWork.length, end: 1 }; }
       annoWork.push(arr); setSel([annoWork.length - 1]);
@@ -1908,13 +1940,13 @@
       pushHistory(); redraw(); return;   // number tool stays active
     }
     if (annoTool === "text") {
-      annoWork.push({ id: uid(), type: "text", x: nx, y: ny, text: "", size: 22, bg: annoTextBg, fg: annoColor });
+      annoWork.push({ id: uid(), type: "text", x: nx, y: ny, text: "", size: 22, color: annoColor, bgOn: annoTextBgOn });
       setSel([annoWork.length - 1]); startTextEdit(annoWork.length - 1, true); return;
     }
     annoAction = { kind: "draw", startNX: nx, startNY: ny };
     annoDraft = annoTool === "box"
-      ? { id: uid(), type: "box", x: nx, y: ny, w: 0, h: 0, color: annoColor }
-      : { id: uid(), type: "arrow", x1: nx, y1: ny, x2: nx, y2: ny, color: annoColor };
+      ? { id: uid(), type: "box", x: nx, y: ny, w: 0, h: 0, color: annoColor, lineStyle: annoLineStyle, lineWidth: annoLineWidth }
+      : { id: uid(), type: "arrow", x1: nx, y1: ny, x2: nx, y2: ny, color: annoColor, lineStyle: annoLineStyle, lineWidth: annoLineWidth };
   }
   function onAnnoMove(e) {
     if (!annoAction) return;
@@ -1968,7 +2000,7 @@
     if (A.kind === "pan") { editorHost.canvas.style.cursor = annoSpace ? "grab" : ""; return; }
     if (A.kind === "draw") {
       const d = annoDraft; annoDraft = null;
-      const ok = d.type === "box" ? (d.w > 0.01 && d.h > 0.01) : (Math.hypot(d.x2 - d.x1, d.y2 - d.y1) > 0.015);
+      const ok = d.type === "box" ? true : (Math.hypot(d.x2 - d.x1, d.y2 - d.y1) > 0.015);
       if (ok) { annoWork.push(d); setSel([annoWork.length - 1]); if (d.type === "arrow") { pinEndpointIfOver(d, 1); pinEndpointIfOver(d, 2); } pushHistory(); }
       resetToSelect(); redraw(); return;
     }
@@ -1998,24 +2030,21 @@
       toolBtns[id] = b; toolbar.append(b);
     });
     toolbar.append(h("span", { class: "sep" }));
-    // Floating color popover (mounted over the canvas, always shown while editing). Carries the
-    // global palette for shapes; swaps to Text/Fill rows when a label is the active context.
-    const swatchEls = [], fgSwatches = [], bgSwatches = [], stampChips = [];
+    // Floating brush popover (mounted over the canvas). Shared color plus contextual options.
+    const swatchEls = [], textBgChips = [], stampChips = [], lineStyleChips = [], lineWidthChips = [];
     const globalSwatches = h("div", { class: "tp-swatches" });
     COLORS.forEach((c) => {
-      const s = h("button", { class: "swatch", style: `background:${c}`, title: c, onclick: () => { annoColor = c; const idx = selArr().filter((i) => annoWork[i] && annoWork[i].type !== "text"); if (idx.length) { idx.forEach((i) => (annoWork[i].color = c)); pushHistory(); } updateColors(); redraw(); } });
+      const s = h("button", { class: "swatch", style: `background:${c}`, title: c, onclick: () => applyColor(c) });
       s._c = c; swatchEls.push(s); globalSwatches.append(s);
     });
     const globalRow = h("div", { class: "tp-row" }, h("span", { class: "lbl" }, "Color"), globalSwatches);
-    const colorRow = (label, prop, special, specialLabel, store) => {
-      const swatches = h("div", { class: "tp-swatches" });
-      const chip = h("button", { class: "chip", title: special === "auto" ? "Auto (contrasts the fill)" : "No background", onclick: () => applyText(prop, special) }, specialLabel);
-      chip._c = special; store.push(chip); swatches.append(chip);
-      COLORS.forEach((c) => { const s = h("button", { class: "swatch", style: `background:${c}`, title: c, onclick: () => applyText(prop, c) }); s._c = c; store.push(s); swatches.append(s); });
-      return h("div", { class: "tp-row" }, h("span", { class: "lbl" }, label), swatches);
-    };
-    const fgRow = colorRow("Text", "fg", "auto", "Auto", fgSwatches);
-    const bgRow = colorRow("Fill", "bg", "none", "None", bgSwatches);
+    const textBgRow = h("div", { class: "tp-row" },
+      h("span", { class: "lbl" }, "Background"),
+      h("div", { class: "tp-swatches" },
+        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(false) }, "Transparent"); b._on = false; textBgChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(true) }, "Opaque"); b._on = true; textBgChips.push(b); return b; })(),
+      ),
+    );
     const stampRow = h("div", { class: "tp-row" },
       h("span", { class: "lbl" }, "Stamp"),
       h("div", { class: "tp-swatches" },
@@ -2023,7 +2052,23 @@
         (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("letters") }, "ABC"); b._style = "letters"; stampChips.push(b); return b; })(),
       ),
     );
-    const textPop = h("div", { class: "text-pop" }, globalRow, stampRow, fgRow, bgRow);
+    const lineStyleRow = h("div", { class: "tp-row" },
+      h("span", { class: "lbl" }, "Style"),
+      h("div", { class: "tp-swatches" },
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("solid") }, "Line"); b._style = "solid"; lineStyleChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dashed") }, "Dash"); b._style = "dashed"; lineStyleChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dotted") }, "Dot"); b._style = "dotted"; lineStyleChips.push(b); return b; })(),
+      ),
+    );
+    const lineWidthRow = h("div", { class: "tp-row" },
+      h("span", { class: "lbl" }, "Width"),
+      h("div", { class: "tp-swatches" },
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("small") }, "S"); b._width = "small"; lineWidthChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("medium") }, "M"); b._width = "medium"; lineWidthChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("large") }, "L"); b._width = "large"; lineWidthChips.push(b); return b; })(),
+      ),
+    );
+    const textPop = h("div", { class: "text-pop" }, globalRow, textBgRow, stampRow, lineStyleRow, lineWidthRow);
     const undoBtn = h("button", { class: "tool", title: "Undo", onclick: undo }, "↶ Undo", h("span", { class: "kbd" }, "⌘Z"));
     const redoBtn = h("button", { class: "tool", title: "Redo", onclick: redo }, "↷ Redo", h("span", { class: "kbd" }, "⌘⇧Z"));
     const delBtn = h("button", { class: "tool", title: "Delete selected", onclick: deleteSel }, "🗑 Delete", h("span", { class: "kbd" }, "Del"));
@@ -2041,7 +2086,7 @@
       const { dx, dy } = evtPos(e);
       for (let i = annoWork.length - 1; i >= 0; i--) { if (annoWork[i].type === "text" && annoHit(annoWork[i], dx, dy)) { setSel([i]); startTextEdit(i, false); redraw(); return; } }
     });
-    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, stampRow, stampChips, fgRow, bgRow, fgSwatches, bgSwatches, undoBtn, redoBtn, delBtn, ctx: canvas.getContext("2d") };
+    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, textBgRow, textBgChips, stampRow, stampChips, lineStyleRow, lineStyleChips, lineWidthRow, lineWidthChips, undoBtn, redoBtn, delBtn, ctx: canvas.getContext("2d") };
   }
   function ensureModal() {
     if (modalEls) return modalEls;
@@ -2104,7 +2149,14 @@
     annoWork = cloneAnns(slot.annotations); annoWork.forEach((a) => { if (!a.id) a.id = uid(); });
     const stamps = annoWork.filter((a) => a.type === "number");
     const lastStamp = stamps[stamps.length - 1];
-    annoTool = "select"; annoColor = "#ef4444"; annoTextBg = "none";
+    const lines = annoWork.filter((a) => a.type === "box" || a.type === "arrow");
+    const lastLine = lines[lines.length - 1];
+    const texts = annoWork.filter((a) => a.type === "text");
+    const lastText = texts[texts.length - 1];
+    annoTool = "select"; annoColor = "#ef4444";
+    annoTextBgOn = lastText ? (lastText.bgOn !== undefined ? !!lastText.bgOn : !!(lastText.bg && lastText.bg !== "none")) : false;
+    annoLineStyle = (lastLine && lastLine.lineStyle) || "solid";
+    annoLineWidth = (lastLine && lastLine.lineWidth) || "medium";
     annoStampStyle = (lastStamp && lastStamp.style) || "numbers";
     annoStampSize = (lastStamp && lastStamp.size) || 20;
     setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false;
