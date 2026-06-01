@@ -54,6 +54,10 @@
   .change-head .idx{font-size:12px;font-weight:700;color:var(--muted);background:#f1f5f9;border-radius:6px;padding:3px 8px;white-space:nowrap}
   .change-head .grow{flex:1}
   .change-head .tools{display:flex;gap:2px}
+  .tutorial-step{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .tutorial-step .slot{aspect-ratio:16/9}
+  .step-drop{border:1.5px dashed var(--line);border-radius:14px;background:#fff;color:var(--muted);padding:18px;text-align:center;margin-bottom:16px}
+  .step-drop.drag{border-color:var(--accent);background:#eef2ff;color:var(--accent)}
 
   .pair{border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:12px;background:#fbfcfe}
   .pair-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -65,12 +69,13 @@
   .slot{
     position:relative;border:2px dashed #cbd5e1;border-radius:10px;aspect-ratio:16/10;
     background:#fff center/contain no-repeat;display:flex;align-items:center;justify-content:center;
-    text-align:center;color:#94a3b8;font-size:12px;padding:8px;cursor:pointer;user-select:none;
+    text-align:center;color:#94a3b8;font-size:12px;padding:8px;cursor:pointer;user-select:none;overflow:hidden;
   }
   .slot.filled{border-style:solid;border-color:var(--line)}
   .slot.drag{border-color:var(--accent);background-color:#eef2ff}
   .slot.paste-target{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.18)}
   .slot .hint b{color:#64748b}
+  .slot-anno-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   .slot-actions{display:flex;gap:6px;margin:6px 0}
   .slot-actions button{flex:1}
   input.cap{margin-top:2px}
@@ -119,9 +124,9 @@
 
   .anno-btn{width:100%;margin-bottom:2px}
   .anno-btn:disabled{opacity:.5;cursor:not-allowed}
-  .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:10px}
   .modal-backdrop.open{display:flex}
-  .modal{background:#fff;border-radius:14px;max-width:96vw;max-height:96vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+  .modal{background:#fff;border-radius:14px;max-width:98vw;max-height:98vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4)}
   .modal-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
   .modal-bar .sep{width:1px;height:26px;background:var(--line);margin:0 4px}
   .tool{padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:600;font-size:13px;color:var(--ink)}
@@ -133,7 +138,7 @@
   .swatch.active{box-shadow:0 0 0 2px var(--accent)}
   .text-pop{position:absolute;top:12px;left:12px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.22);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
   .tp-row{display:flex;align-items:center;gap:9px}
-  .tp-row .lbl{font-size:12px;font-weight:700;color:var(--muted);width:30px}
+  .tp-row .lbl{font-size:12px;font-weight:700;color:var(--muted);width:42px}
   .tp-swatches{display:flex;align-items:center;gap:6px}
   .chip{padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer}
   .chip:hover{background:#f8fafc}
@@ -157,6 +162,7 @@
   .modal-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
   .modal-hint{color:var(--muted);font-size:12px}
   .dims{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .preview-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .canvas-wrap{
     background:
       linear-gradient(45deg,#eef2f7 25%,transparent 25%),
@@ -166,8 +172,12 @@
     background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0;
     border:1px solid var(--line);border-radius:14px;padding:16px;overflow:auto;max-height:calc(100vh - 120px);
   }
-  #preview{display:block;max-width:100%;height:auto;margin:0 auto;border-radius:8px;
+  .canvas-wrap.fit-vertical{overflow-y:auto;overflow-x:hidden}
+  .canvas-wrap.fit-horizontal{height:calc(100vh - 120px);overflow-x:auto;overflow-y:hidden;display:flex;align-items:center;justify-content:flex-start}
+  #preview,#tutPreview{display:block;height:auto;margin:0 auto;border-radius:8px;
     box-shadow:0 10px 30px rgba(15,23,42,.12)}
+  .canvas-wrap.fit-vertical #preview,.canvas-wrap.fit-vertical #tutPreview{width:100%;height:auto}
+  .canvas-wrap.fit-horizontal #preview,.canvas-wrap.fit-horizontal #tutPreview{height:100%;width:auto;max-width:none;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -175,6 +185,7 @@
 <nav class="tabs">
   <button class="tab active" data-tab="anno">✎ Annotator</button>
   <button class="tab" data-tab="ba">◧ Before / After</button>
+  <button class="tab" data-tab="tut">① Tutorial</button>
 </nav>
 <p class="sub" id="modeSub">Compose before/after screenshots into a single shareable PNG — entirely in your browser, nothing uploaded.</p>
 
@@ -243,11 +254,84 @@
 
   <aside class="preview">
     <div class="preview-bar">
-      <span id="dims" class="dims"></span>
+      <div class="preview-meta">
+        <span id="dims" class="dims"></span>
+      </div>
       <div class="bar-actions" id="barActions"></div>
     </div>
-    <div class="canvas-wrap">
+    <div class="canvas-wrap" id="previewWrap">
       <canvas id="preview"></canvas>
+    </div>
+  </aside>
+</div>
+</div>
+
+<div id="tab-tut" hidden>
+<div class="app">
+  <section class="editor">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Tutorial</h2>
+        <button id="tutReset" class="ghost tiny" title="Clear the tutorial and start over">↺ Reset tutorial</button>
+      </div>
+      <div class="field">
+        <label for="tutTitle">Title</label>
+        <input type="text" id="tutTitle" placeholder="e.g. How to create a report">
+      </div>
+      <div class="field row">
+        <div>
+          <label for="tutBg">Background</label>
+          <input type="color" id="tutBg" value="#ffffff">
+        </div>
+        <div>
+          <label for="tutScale">Export quality</label>
+          <select id="tutScale">
+            <option value="1">1× (standard)</option>
+            <option value="2" selected>2× (crisp)</option>
+            <option value="3">3× (high-res)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field row">
+        <div>
+          <label for="tutLayout">Layout</label>
+          <select id="tutLayout">
+            <option value="vertical" selected>Vertical (top to bottom)</option>
+            <option value="horizontal">Horizontal (left to right)</option>
+          </select>
+        </div>
+        <div>
+          <label for="tutNumbering">Step labels</label>
+          <select id="tutNumbering">
+            <option value="numbers" selected>Numbers (1, 2, 3)</option>
+            <option value="letters">Letters (A, B, C)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="tutFiles">Images</label>
+        <button id="tutBrowse" style="width:100%">Upload images</button>
+        <input type="file" id="tutFiles" accept="image/*" multiple hidden>
+      </div>
+      <div class="field doc-actions">
+        <button id="tutSaveProject" title="Download an editable project file (images included)">💾 Save project</button>
+        <button id="tutOpenProject" title="Open a previously saved project file">📂 Open project</button>
+      </div>
+    </div>
+
+    <div id="tutorialSteps"></div>
+    <button id="addTutorialStep" class="add-change">+ Add step</button>
+  </section>
+
+  <aside class="preview">
+    <div class="preview-bar">
+      <div class="preview-meta">
+        <span id="tutDims" class="dims"></span>
+      </div>
+      <div class="bar-actions" id="tutActions"></div>
+    </div>
+    <div class="canvas-wrap" id="tutPreviewWrap">
+      <canvas id="tutPreview"></canvas>
     </div>
   </aside>
 </div>
@@ -278,6 +362,7 @@
   const newSlot = () => ({ caption: "", img: null, dataUrl: null, w: 0, h: 0, annotations: [], _el: null });
   const newPair = () => ({ id: uid(), before: newSlot(), after: newSlot() });
   const newChange = () => ({ id: uid(), title: "", pairs: [newPair()] });
+  const newTutorialStep = () => ({ id: uid(), title: "", slot: newSlot() });
   const todayStr = () => new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
   const state = {
@@ -290,6 +375,14 @@
     dateEnabled: false,
     dateText: todayStr(),
     changes: [newChange()],
+    tutorial: {
+      title: "",
+      bg: "#ffffff",
+      scale: 2,
+      layout: "vertical",
+      numbering: "numbers",
+      steps: [],
+    },
   };
 
   let activePaste = null; // { el, obj }
@@ -313,6 +406,17 @@
       })),
       tab: currentTab,
       anno: { dataUrl: annoDoc.dataUrl, annotations: annoDoc.annotations },
+      tutorial: {
+        title: state.tutorial.title,
+        bg: state.tutorial.bg,
+        scale: state.tutorial.scale,
+        layout: state.tutorial.layout,
+        numbering: state.tutorial.numbering,
+        steps: state.tutorial.steps.map((step) => ({
+          title: step.title || "",
+          slot: { caption: step.slot.caption, dataUrl: step.slot.dataUrl, annotations: step.slot.annotations },
+        })),
+      },
     };
   }
   const serialize = () => JSON.stringify(snapshot());
@@ -347,7 +451,16 @@
       })),
     }));
     if (!state.changes.length) state.changes = [newChange()];
-    currentTab = d.tab === "anno" ? "anno" : "ba";
+    const tut = d.tutorial || {};
+    state.tutorial.title = tut.title || "";
+    state.tutorial.bg = tut.bg || "#ffffff";
+    state.tutorial.scale = Number(tut.scale) || 2;
+    state.tutorial.layout = tut.layout === "horizontal" ? "horizontal" : "vertical";
+    state.tutorial.numbering = tut.numbering === "letters" ? "letters" : "numbers";
+    state.tutorial.steps = Array.isArray(tut.steps)
+      ? tut.steps.map((step) => ({ id: uid(), title: step.title || "", slot: restoreSlot(step.slot || step) }))
+      : [];
+    currentTab = d.tab === "anno" ? "anno" : d.tab === "tut" ? "tut" : "ba";
     annoDoc.img = null; annoDoc.w = 0; annoDoc.h = 0;
     annoDoc.dataUrl = (d.anno && d.anno.dataUrl) || null;
     annoDoc.annotations = (d.anno && Array.isArray(d.anno.annotations)) ? d.anno.annotations.map((a) => ({ ...a })) : [];
@@ -362,7 +475,7 @@
   // Replace the whole document from a parsed project object, then refresh the UI.
   function loadProject(d) {
     if (!applyState(d)) { alert("That doesn't look like a valid project file."); return; }
-    syncControls(); buildEditor(); hydrateImages(); drawPreview();
+    syncControls(); syncTutorialControls(); buildEditor(); buildTutorialEditor(); hydrateImages(); drawPreview(); drawTutorialPreview();
   }
   function hydrateImages() {
     state.changes.forEach((ch) => ch.pairs.forEach((p) => {
@@ -374,6 +487,14 @@
         }
       });
     }));
+    state.tutorial.steps.forEach((step) => {
+      const s = step.slot;
+      if (s.dataUrl && !s.img) {
+        const img = new Image();
+        img.onload = () => { s.img = img; s.w = img.naturalWidth; s.h = img.naturalHeight; refreshSlot(s); drawTutorialPreview(); };
+        img.src = s.dataUrl;
+      }
+    });
   }
   function syncControls() {
     document.getElementById("title").value = state.title;
@@ -385,6 +506,13 @@
     document.getElementById("dateEnabled").checked = state.dateEnabled;
     document.getElementById("dateText").value = state.dateText;
   }
+  function syncTutorialControls() {
+    document.getElementById("tutTitle").value = state.tutorial.title;
+    document.getElementById("tutBg").value = state.tutorial.bg;
+    document.getElementById("tutScale").value = String(state.tutorial.scale);
+    document.getElementById("tutLayout").value = state.tutorial.layout;
+    document.getElementById("tutNumbering").value = state.tutorial.numbering;
+  }
   function resetAll() {
     if (!confirm("Clear everything and start over? This can't be undone.")) return;
     try { sessionStorage.removeItem(STORE_KEY); } catch (e) {}
@@ -392,6 +520,16 @@
     state.bg = "#ffffff"; state.scale = 2; state.layout = "vertical";
     state.dateEnabled = false; state.dateText = todayStr(); state.changes = [newChange()];
     syncControls(); buildEditor(); drawPreview();
+  }
+  function resetTutorial() {
+    if (!confirm("Clear the tutorial and start over? This can't be undone.")) return;
+    state.tutorial.title = "";
+    state.tutorial.bg = "#ffffff";
+    state.tutorial.scale = 2;
+    state.tutorial.layout = "vertical";
+    state.tutorial.numbering = "numbers";
+    state.tutorial.steps = [];
+    syncTutorialControls(); buildTutorialEditor(); drawTutorialPreview();
   }
 
   // ---------- tiny DOM helper ----------
@@ -451,20 +589,38 @@
     buildEditor(); drawPreview();
     fillPairs(ch.pairs, files);
   }
+  function renderActivePreview() {
+    currentTab === "tut" ? drawTutorialPreview() : drawPreview();
+  }
   function setSlotImage(slot, dataUrl) {
     const img = new Image();
     img.onload = () => {
       slot.img = img; slot.dataUrl = dataUrl;
       slot.w = img.naturalWidth; slot.h = img.naturalHeight;
       refreshSlot(slot);
-      drawPreview();
+      renderActivePreview();
     };
     img.src = dataUrl;
   }
   function clearSlot(slot) {
     slot.img = null; slot.dataUrl = null; slot.w = 0; slot.h = 0;
     refreshSlot(slot);
-    drawPreview();
+    renderActivePreview();
+  }
+  function drawSlotAnnotations(slot) {
+    const el = slot._el, cv = slot._overlay;
+    if (!el || !cv || !slot.img) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!w || !h) { requestAnimationFrame(() => drawSlotAnnotations(slot)); return; }
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    cv.style.width = w + "px"; cv.style.height = h + "px";
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const s = Math.min(w / slot.w, h / slot.h);
+    const iw = slot.w * s, ih = slot.h * s;
+    drawAnnotations(ctx, { x: (w - iw) / 2, y: (h - ih) / 2, w: iw, h: ih }, slot.annotations);
   }
   function refreshSlot(slot) {
     const el = slot._el;
@@ -473,12 +629,23 @@
       el.classList.add("filled");
       el.style.backgroundImage = `url(${slot.dataUrl})`;
       el.innerHTML = "";
+      slot._overlay = h("canvas", { class: "slot-anno-overlay" });
+      el.append(slot._overlay);
+      requestAnimationFrame(() => drawSlotAnnotations(slot));
     } else {
       el.classList.remove("filled");
       el.style.backgroundImage = "";
+      slot._overlay = null;
       el.innerHTML = `<span class="hint"><b>Click to select</b><br>then paste, or drop / browse an image</span>`;
     }
     if (slot._annoBtn) { slot._annoBtn.disabled = !slot.img; slot._annoBtn.textContent = annoLabel(slot); }
+  }
+  function refreshAllSlotAnnotations() {
+    state.changes.forEach((ch) => ch.pairs.forEach((p) => {
+      drawSlotAnnotations(p.before);
+      drawSlotAnnotations(p.after);
+    }));
+    state.tutorial.steps.forEach((step) => drawSlotAnnotations(step.slot));
   }
   function setPasteTarget(el, obj) {
     if (activePaste && activePaste.el) activePaste.el.classList.remove("paste-target");
@@ -628,6 +795,88 @@
     activePaste = null;
     changesRoot.innerHTML = "";
     state.changes.forEach((ch, ci) => changesRoot.append(changeBlock(ch, ci)));
+  }
+
+  // ---------- tutorial editor UI ----------
+  const tutorialRoot = document.getElementById("tutorialSteps");
+
+  function addTutorialFiles(fileList) {
+    const files = imageFiles(fileList);
+    if (!files.length) return;
+    const created = files.map(() => newTutorialStep());
+    state.tutorial.steps.push(...created);
+    buildTutorialEditor(); drawTutorialPreview();
+    created.forEach((step, i) => loadFile(files[i], step.slot));
+  }
+
+  function tutorialImageBlock(step, idx) {
+    const slot = step.slot;
+    const file = h("input", {
+      type: "file", accept: "image/*", style: "display:none",
+      onchange: (e) => { loadFile(e.target.files[0], slot); e.target.value = ""; },
+    });
+    const drop = h("div", {
+      class: "slot",
+      onclick: () => setPasteTarget(drop, slot),
+      ondragover: (e) => { e.preventDefault(); drop.classList.add("drag"); },
+      ondragleave: () => drop.classList.remove("drag"),
+      ondrop: (e) => {
+        e.preventDefault(); drop.classList.remove("drag");
+        const files = imageFiles(e.dataTransfer.files);
+        if (files[0]) loadFile(files[0], slot);
+        if (files.length > 1) addTutorialFiles(files.slice(1));
+      },
+    });
+    slot._el = drop;
+    refreshSlot(slot);
+
+    const cap = h("input", {
+      type: "text", class: "cap", value: slot.caption || "", placeholder: "Step caption (optional)",
+      oninput: (e) => { slot.caption = e.target.value; drawTutorialPreview(); },
+    });
+    const titleInput = h("input", {
+      type: "text", value: step.title || "", placeholder: "Text after step number (optional)",
+      oninput: (e) => { step.title = e.target.value; drawTutorialPreview(); },
+    });
+    const annoBtn = h("button", {
+      class: "anno-btn tiny", disabled: slot.img ? null : "",
+      title: "Draw boxes, arrows, numbers and labels on this image",
+      onclick: () => openAnnotator(slot, annoBtn),
+    }, annoLabel(slot));
+    slot._annoBtn = annoBtn;
+
+    const move = (dir) => {
+      const j = idx + dir;
+      if (j < 0 || j >= state.tutorial.steps.length) return;
+      [state.tutorial.steps[idx], state.tutorial.steps[j]] = [state.tutorial.steps[j], state.tutorial.steps[idx]];
+      buildTutorialEditor(); drawTutorialPreview();
+    };
+    const multi = state.tutorial.steps.length > 1;
+    const head = h("div", { class: "change-head" },
+      h("span", { class: "idx" }, `#${idx + 1}`),
+      h("div", { class: "grow" }, titleInput),
+      h("div", { class: "tools" },
+        multi ? h("button", { class: "ghost tiny", title: "Move step up", onclick: () => move(-1) }, "↑") : null,
+        multi ? h("button", { class: "ghost tiny", title: "Move step down", onclick: () => move(1) }, "↓") : null,
+        h("button", { class: "ghost tiny", onclick: () => file.click() }, "Browse"),
+        h("button", { class: "ghost tiny", onclick: () => clearSlot(slot) }, "Clear"),
+        multi ? h("button", { class: "ghost tiny", title: "Delete step", onclick: () => { state.tutorial.steps.splice(idx, 1); buildTutorialEditor(); drawTutorialPreview(); } }, "✕") : null,
+      ),
+    );
+    return h("div", { class: "tutorial-step" }, head, drop, file, h("div", { class: "slot-actions" }, annoBtn), cap);
+  }
+
+  function buildTutorialEditor() {
+    activePaste = null;
+    tutorialRoot.innerHTML = "";
+    const addDrop = h("div", {
+      class: "step-drop",
+      ondragover: (e) => { e.preventDefault(); addDrop.classList.add("drag"); },
+      ondragleave: () => addDrop.classList.remove("drag"),
+      ondrop: (e) => { e.preventDefault(); addDrop.classList.remove("drag"); addTutorialFiles(e.dataTransfer.files); },
+    }, "Drop multiple images here to add them as numbered steps.");
+    tutorialRoot.append(addDrop);
+    state.tutorial.steps.forEach((step, idx) => tutorialRoot.append(tutorialImageBlock(step, idx)));
   }
 
   // ---------- layout + canvas rendering ----------
@@ -783,6 +1032,107 @@
     return { W, H: y, items };
   }
 
+  const T = {
+    PAD: 48, TITLE: 48, NUM: 22, STEP_TITLE: 26, CAP: 20,
+    cellW: 760, horizontalCellW: 560, stepGap: 44, titleGap: 34, numGap: 16,
+    capGap: 14, maxImgH: 720,
+  };
+
+  function alphaLabel(n) {
+    let x = Math.max(1, Math.floor(Number(n) || 1)), out = "";
+    while (x > 0) {
+      x--;
+      out = String.fromCharCode(65 + (x % 26)) + out;
+      x = Math.floor(x / 26);
+    }
+    return out;
+  }
+  const markerLabel = (n, style) => style === "letters" ? alphaLabel(n) : String(n);
+
+  function tutorialImageLayout(slot, x, y, cw, items) {
+    const natW = (slot.img && slot.w) ? slot.w : cw;
+    const natH = (slot.img && slot.h) ? slot.h : Math.round(cw * 0.6);
+    nbAspect = natH ? natW / natH : 1;
+    const ext = slot.img ? annsExtent(slot.annotations || []) : { x0: 0, y0: 0, x1: 1, y1: 1 };
+    const regWu = ext.x1 - ext.x0, regHu = ext.y1 - ext.y0;
+    let s = cw / (regWu * natW);
+    if (regHu * natH * s > T.maxImgH) s = T.maxImgH / (regHu * natH);
+    const regionW = regWu * natW * s, regionH = regHu * natH * s;
+    const unitX = natW * s, unitY = natH * s;
+    const regionX = x + (cw - regionW) / 2;
+    items.push({ kind: "image", img: slot.img, x: regionX + (0 - ext.x0) * unitX, y: y + (0 - ext.y0) * unitY, w: unitX, h: unitY, annotations: slot.annotations });
+    return regionH;
+  }
+
+  function computeTutorialLayout() {
+    const tut = state.tutorial;
+    const horiz = tut.layout === "horizontal";
+    const steps = tut.steps;
+    const cellW = horiz ? T.horizontalCellW : T.cellW;
+    const contentW = horiz
+      ? Math.max(cellW, steps.length * cellW + Math.max(0, steps.length - 1) * T.stepGap)
+      : cellW;
+    const W = contentW + T.PAD * 2;
+    const items = [];
+    let y = T.PAD;
+
+    if ((tut.title || "").trim()) {
+      const lines = wrap(tut.title, font(800, T.TITLE), contentW);
+      items.push({ kind: "text", lines, x: T.PAD + contentW / 2, y, size: T.TITLE, weight: 800, color: "#0f172a", align: "center" });
+      y += lines.length * T.TITLE * C.lh + T.titleGap;
+    }
+
+    const stepBlock = (step, idx, x, y0) => {
+      const label = markerLabel(idx + 1, tut.numbering);
+      meas.font = font(800, T.NUM);
+      const badgeW = Math.max(42, meas.measureText(label).width + 28), badgeH = 42;
+      items.push({ kind: "badge", cx: x + badgeW / 2, y: y0, w: badgeW, h: badgeH, text: label, size: T.NUM, bg: "#eef2ff", fg: "#4f46e5" });
+      let headH = badgeH;
+      if ((step.title || "").trim()) {
+        const textX = x + badgeW + 14;
+        const textW = Math.max(80, cellW - badgeW - 14);
+        const lines = wrap(step.title, font(700, T.STEP_TITLE), textW);
+        const lineH = T.STEP_TITLE * C.lh, textH = lines.length * lineH;
+        items.push({ kind: "text", lines, x: textX, y: y0 + badgeH / 2 - textH / 2 + lineH / 2, size: T.STEP_TITLE, weight: 700, color: "#0f172a", align: "left", baseline: "middle" });
+        headH = Math.max(headH, textH);
+      }
+      let cy = y0 + headH + T.numGap;
+      cy += tutorialImageLayout(step.slot, x, cy, cellW, items);
+      if ((step.slot.caption || "").trim()) {
+        cy += T.capGap;
+        const lines = wrap(step.slot.caption, font(500, T.CAP), cellW);
+        items.push({ kind: "text", lines, x: x + cellW / 2, y: cy, size: T.CAP, weight: 500, color: "#475569", align: "center" });
+        cy += lines.length * T.CAP * C.lh;
+      }
+      return cy - y0;
+    };
+
+    if (steps.length) {
+      if (horiz) {
+        let x = T.PAD, maxH = 0;
+        steps.forEach((step, idx) => {
+          if (idx) x += T.stepGap;
+          maxH = Math.max(maxH, stepBlock(step, idx, x, y));
+          x += cellW;
+        });
+        y += maxH;
+      } else {
+        steps.forEach((step, idx) => {
+          if (idx) y += T.stepGap;
+          y += stepBlock(step, idx, T.PAD, y);
+        });
+      }
+    }
+
+    if (!items.length) {
+      items.push({ kind: "text", lines: ["Upload images to build a tutorial"], x: W / 2, y: T.PAD, size: 22, weight: 500, color: "#94a3b8", align: "center" });
+      y += 30;
+    }
+
+    y += T.PAD;
+    return { W, H: y, items };
+  }
+
   function draw(ctx, items, S, bg, W, H) {
     ctx.setTransform(S, 0, 0, S, 0, 0);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
@@ -792,8 +1142,10 @@
         ctx.font = font(it.weight, it.size);
         ctx.fillStyle = it.color;
         ctx.textAlign = it.align;
+        ctx.textBaseline = it.baseline || "top";
         const lh = it.size * C.lh;
         it.lines.forEach((ln, i) => ctx.fillText(ln, it.x, it.y + i * lh));
+        ctx.textBaseline = "top";
       } else if (it.kind === "line") {
         ctx.strokeStyle = it.color; ctx.lineWidth = it.width;
         ctx.beginPath(); ctx.moveTo(it.x1, it.y); ctx.lineTo(it.x2, it.y); ctx.stroke();
@@ -833,14 +1185,36 @@
     draw(canvas.getContext("2d"), items, S, state.bg, W, H);
     return { W, H, S };
   }
+  function renderTutorialModel(canvas) {
+    const S = state.tutorial.scale;
+    const { W, H, items } = computeTutorialLayout();
+    canvas.width = Math.max(1, Math.round(W * S));
+    canvas.height = Math.max(1, Math.round(H * S));
+    draw(canvas.getContext("2d"), items, S, state.tutorial.bg, W, H);
+    return { W, H, S };
+  }
 
   // ---------- preview + export ----------
   const previewCanvas = document.getElementById("preview");
   const dimsEl = document.getElementById("dims");
+  const tutorialCanvas = document.getElementById("tutPreview");
+  const tutorialDimsEl = document.getElementById("tutDims");
+  function applyPreviewFit(kind, layout) {
+    const wrap = document.getElementById(kind === "tut" ? "tutPreviewWrap" : "previewWrap");
+    wrap.classList.toggle("fit-horizontal", layout === "horizontal");
+    wrap.classList.toggle("fit-vertical", layout !== "horizontal");
+  }
 
   function drawPreview() {
     const { W, H, S } = renderModel(previewCanvas, state.title, state.changes);
     dimsEl.textContent = `${Math.round(W * S)} × ${Math.round(H * S)} px`;
+    applyPreviewFit("ba", state.layout);
+    scheduleSave();
+  }
+  function drawTutorialPreview() {
+    const { W, H, S } = renderTutorialModel(tutorialCanvas);
+    tutorialDimsEl.textContent = `${Math.round(W * S)} × ${Math.round(H * S)} px`;
+    applyPreviewFit("tut", state.tutorial.layout);
     scheduleSave();
   }
 
@@ -869,6 +1243,11 @@
     renderModel(tmp, title, changes);
     return tmp;
   }
+  function toTutorialCanvas() {
+    const tmp = document.createElement("canvas");
+    renderTutorialModel(tmp);
+    return tmp;
+  }
   const blobFromCanvas = (canvas, mime, q) =>
     new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob failed"))), mime, q));
 
@@ -890,6 +1269,25 @@
       toast(fmt === "png" ? "Copy failed" : "Copy failed — browser may only allow PNG");
     }
   }
+  function tutorialExportDownload(fmt) {
+    const name = slug(state.tutorial.title || "tutorial");
+    if (fmt === "svg") {
+      downloadBlob(new Blob([buildTutorialSVG()], { type: "image/svg+xml" }), `${name}.svg`);
+      return;
+    }
+    blobFromCanvas(toTutorialCanvas(), RASTER[fmt], fmt === "png" ? undefined : 0.92)
+      .then((b) => downloadBlob(b, `${name}.${EXT[fmt]}`));
+  }
+  async function tutorialExportCopy(fmt) {
+    try {
+      if (fmt === "svg") { await navigator.clipboard.writeText(buildTutorialSVG()); toast("Copied SVG markup"); return; }
+      const blob = await blobFromCanvas(toTutorialCanvas(), RASTER[fmt], fmt === "png" ? undefined : 0.92);
+      await navigator.clipboard.write([new ClipboardItem({ [RASTER[fmt]]: blob })]);
+      toast(`Copied ${fmt.toUpperCase()} to clipboard`);
+    } catch (e) {
+      toast(fmt === "png" ? "Copy failed" : "Copy failed — browser may only allow PNG");
+    }
+  }
   function downloadAllSections(fmt) {
     if (!state.changes.length) return;
     // Stagger so the browser doesn't drop all-but-one of the saves.
@@ -900,20 +1298,21 @@
 
   // ---- SVG export (reuses the same layout; vector text, embedded raster images) ----
   const svgEsc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  function buildSVG(title, changes) {
-    const { W, H, items } = computeLayout(title, changes);
+  function buildSVGFromLayout(layout, bg) {
+    const { W, H, items } = layout;
     const fam = FAMILY.replace(/"/g, "'");
     const out = [
       `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
-      `<rect width="${W}" height="${H}" fill="${state.bg}"/>`,
+      `<rect width="${W}" height="${H}" fill="${bg}"/>`,
     ];
     let clip = 0;
     for (const it of items) {
       if (it.kind === "text") {
         const anchor = it.align === "center" ? "middle" : it.align === "right" ? "end" : "start";
+        const db = it.baseline === "middle" ? "central" : "text-before-edge";
         const lh = it.size * C.lh;
         it.lines.forEach((ln, i) => out.push(
-          `<text x="${it.x}" y="${it.y + i * lh}" font-family="${fam}" font-size="${it.size}" font-weight="${it.weight}" fill="${it.color}" text-anchor="${anchor}" dominant-baseline="text-before-edge">${svgEsc(ln)}</text>`));
+          `<text x="${it.x}" y="${it.y + i * lh}" font-family="${fam}" font-size="${it.size}" font-weight="${it.weight}" fill="${it.color}" text-anchor="${anchor}" dominant-baseline="${db}">${svgEsc(ln)}</text>`));
       } else if (it.kind === "line") {
         out.push(`<line x1="${it.x1}" y1="${it.y}" x2="${it.x2}" y2="${it.y}" stroke="${it.color}" stroke-width="${it.width}"/>`);
       } else if (it.kind === "badge") {
@@ -932,6 +1331,12 @@
     }
     out.push("</svg>");
     return out.join("");
+  }
+  function buildSVG(title, changes) {
+    return buildSVGFromLayout(computeLayout(title, changes), state.bg);
+  }
+  function buildTutorialSVG() {
+    return buildSVGFromLayout(computeTutorialLayout(), state.tutorial.bg);
   }
 
   // perceived luminance (0..1) of a #rgb / #rrggbb color
@@ -990,10 +1395,10 @@
       ];
     }
     if (a.type === "number") {
-      const cx = X(a.x), cy = Y(a.y), r = 20 * k;
+      const cx = X(a.x), cy = Y(a.y), r = (a.size || 20) * k;
       return [
         { k: "circle", cx, cy, r, fill: col },
-        { k: "text", x: cx, y: cy, text: String(a.n), size: r * 1.25, fill: "#fff", anchor: "center", baseline: "middle", weight: 700 },
+        { k: "text", x: cx, y: cy, text: markerLabel(a.n, a.style), size: r * 1.25, fill: "#fff", anchor: "center", baseline: "middle", weight: 700 },
       ];
     }
     if (a.type === "text") {
@@ -1052,7 +1457,7 @@
   // normalized bounding box of an annotation (in image-relative 0..1 units)
   function annNormBBox(a) {
     if (a.type === "box") return { x: a.x, y: a.y, w: a.w, h: a.h };
-    if (a.type === "number") { const r = 20 / 560, ry = r * nbAspect; return { x: a.x - r, y: a.y - ry, w: 2 * r, h: 2 * ry }; }
+    if (a.type === "number") { const r = (a.size || 20) / 560, ry = r * nbAspect; return { x: a.x - r, y: a.y - ry, w: 2 * r, h: 2 * ry }; }
     if (a.type === "text") { const tm = textMetrics(a.text, a.size || 22); return { x: a.x, y: a.y, w: tm.w / 560, h: tm.h / 560 * nbAspect }; }
     if (a.type === "arrow") { return { x: Math.min(a.x1, a.x2), y: Math.min(a.y1, a.y2), w: Math.abs(a.x2 - a.x1), h: Math.abs(a.y2 - a.y1) }; }
     return { x: a.x || 0, y: a.y || 0, w: 0, h: 0 };
@@ -1104,9 +1509,9 @@
   }
 
   // ---- project save / open (.json, images included) ----
-  function saveProject() {
+  function saveProject(name) {
     const blob = new Blob([JSON.stringify(snapshot())], { type: "application/json" });
-    downloadBlob(blob, slug(state.title) + ".beforeafter.json");
+    downloadBlob(blob, slug(name || state.title) + ".beforeafter.json");
   }
   function openProjectFile(file) {
     if (!file) return;
@@ -1160,6 +1565,14 @@
       dropdown("⬇ Download", "primary", [{ items: downloadItems(() => slug(state.title), () => state.title, () => state.changes) }]),
     );
   }
+  function buildTutorialActions() {
+    const bar = document.getElementById("tutActions");
+    bar.innerHTML = "";
+    bar.append(
+      dropdown("⧉ Copy", "", [{ items: COPY_FORMATS.map(([f, l]) => ({ label: l, onClick: () => tutorialExportCopy(f) })) }]),
+      dropdown("⬇ Download", "primary", [{ items: DL_FORMATS.map(([f, l]) => ({ label: l, onClick: () => tutorialExportDownload(f) })) }]),
+    );
+  }
 
   // ---------- annotation editor (modal) ----------
   const annoLabel = (slot) => `✏ Annotate${slot.annotations.length ? ` (${slot.annotations.length})` : ""}`;
@@ -1174,6 +1587,8 @@
   let annoSlot = null, annoBtnRef = null;
   let annoWork = [], annoTool = "select", annoColor = "#ef4444";
   let annoTextBg = "none";   // default background for new text labels (foreground shares annoColor)
+  let annoStampStyle = "numbers";
+  let annoStampSize = 20;
   let annoSel = new Set();          // selected indices
   let annoDraft = null;             // in-progress new box/arrow
   let annoAction = null;            // active gesture {kind,...}
@@ -1202,7 +1617,7 @@
   function annoHit(a, dx, dy) {
     const rect = annoImgRect, k = rect.w / 560, X = (n) => rect.x + n * rect.w, Y = (n) => rect.y + n * rect.h;
     if (a.type === "box") { const x = X(a.x), y = Y(a.y); return dx >= x && dx <= x + a.w * rect.w && dy >= y && dy <= y + a.h * rect.h; }
-    if (a.type === "number") { const r = 20 * k; return Math.hypot(dx - X(a.x), dy - Y(a.y)) <= r; }
+    if (a.type === "number") { const r = (a.size || 20) * k; return Math.hypot(dx - X(a.x), dy - Y(a.y)) <= r; }
     if (a.type === "text") { const tm = textMetrics(a.text, (a.size || 22) * k), x = X(a.x), y = Y(a.y); return dx >= x && dx <= x + tm.w && dy >= y && dy <= y + tm.h; }
     if (a.type === "arrow") { const e = resolveArrowEnds(a, buildById(annoWork)); return distSeg(dx, dy, X(e.x1), Y(e.y1), X(e.x2), Y(e.y2)) <= Math.max(8, 6 * k); }
     return false;
@@ -1262,20 +1677,33 @@
     if (texts.length === 1) { const a = texts[0]; return { fg: a.fg !== undefined ? a.fg : "auto", bg: a.bg !== undefined ? a.bg : (a.color || "#ef4444") }; }
     return { fg: annoColor, bg: annoTextBg };
   }
-  // text props bar is shown when the text tool is active or any text label is selected
+  function curStampStyle() {
+    return annoStampStyle;
+  }
+  function applyStampStyle(style) {
+    annoStampStyle = style;
+    const stamps = annoWork.filter((a) => a.type === "number");
+    if (stamps.length) { stamps.forEach((a) => (a.style = style)); pushHistory(); }
+    updateTextProps(); redraw();
+  }
+  // brush config is shown when a drawing tool is active or an annotation is selected
   function updateTextProps() {
     const m = editorHost; if (!m || !m.textPop) return;
     const show = annoTool !== "select" || annoSel.size > 0;   // hide the floating palette while idly selecting
     m.textPop.style.display = show ? "block" : "none";
     if (!show) return;
     const textCtx = annoTool === "text" || selArr().some((i) => annoWork[i] && annoWork[i].type === "text");
+    const stampCtx = annoTool === "number" || selArr().some((i) => annoWork[i] && annoWork[i].type === "number");
     m.globalRow.style.display = textCtx ? "none" : "flex";   // global palette for shapes...
     m.fgRow.style.display = m.bgRow.style.display = textCtx ? "flex" : "none";   // ...or Text/Fill for labels
+    m.stampRow.style.display = stampCtx ? "flex" : "none";
     updateColors();
-    if (!textCtx) return;
-    const cur = curTextStyle();
-    m.fgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.fg));
-    m.bgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.bg));
+    if (stampCtx) m.stampChips.forEach((s) => s.classList.toggle("active", s._style === curStampStyle()));
+    if (textCtx) {
+      const cur = curTextStyle();
+      m.fgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.fg));
+      m.bgSwatches.forEach((s) => s.classList.toggle("active", s._c === cur.bg));
+    }
   }
   function applyText(prop, c) {
     if (prop === "fg") { if (c !== "auto") annoColor = c; }   // foreground shares the global color; "auto" is label-only
@@ -1317,6 +1745,8 @@
       hs.push({ kind: "mkArrow", x: pb.x + pb.w + 16, y: pb.y + pb.h / 2 });
     } else if (a.type === "number") {
       const bb = annNormBBox(a);
+      [["nw", bb.x, bb.y], ["ne", bb.x + bb.w, bb.y], ["sw", bb.x, bb.y + bb.h], ["se", bb.x + bb.w, bb.y + bb.h]]
+        .forEach(([c, nx, ny]) => hs.push({ kind: "resizeStamp", corner: c, x: N2DX(nx), y: N2DY(ny) }));
       hs.push({ kind: "mkArrow", x: N2DX(bb.x + bb.w) + 16, y: N2DY(bb.y + bb.h / 2) });
     }
     return hs;
@@ -1350,7 +1780,7 @@
     selHandles().forEach((hd) => {
       ctx.save();
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "#4f46e5"; ctx.lineWidth = 2;
-      if (hd.kind === "resize" || hd.kind === "resizeText") {
+      if (hd.kind === "resize" || hd.kind === "resizeText" || hd.kind === "resizeStamp") {
         ctx.beginPath(); ctx.rect(hd.x - 5, hd.y - 5, 10, 10); ctx.fill(); ctx.stroke();
       } else {
         ctx.beginPath(); ctx.arc(hd.x, hd.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -1440,6 +1870,9 @@
       const ax = hd.corner.includes("w") ? pb.x + pb.w : pb.x;
       const ay = hd.corner.includes("n") ? pb.y + pb.h : pb.y;
       annoAction = { kind: "resizeText", i: selArr()[0], corner: hd.corner, ax, ay, size0: a.size || 22, diag0: Math.hypot(pb.w, pb.h) };
+    } else if (hd.kind === "resizeStamp") {
+      const cx = N2DX(a.x), cy = N2DY(a.y);
+      annoAction = { kind: "resizeStamp", i: selArr()[0], cx, cy };
     }
     redraw();
   }
@@ -1452,6 +1885,11 @@
       editorHost.canvas.style.cursor = "grabbing"; return;
     }
     const { dx, dy } = evtPos(e), nx = D2NX(dx), ny = D2NY(dy);
+    if (annoTool === "number") {
+      for (const hd of selHandles().filter((h) => h.kind === "resizeStamp")) {
+        if (Math.hypot(dx - hd.x, dy - hd.y) <= 12) { startHandle(hd, nx, ny); return; }
+      }
+    }
     if (annoTool === "select") {
       for (const hd of selHandles()) { if (Math.hypot(dx - hd.x, dy - hd.y) <= 12) { startHandle(hd, nx, ny); return; } }
       let hit = -1;
@@ -1466,7 +1904,7 @@
     }
     if (annoTool === "number") {
       const n = annoWork.filter((a) => a.type === "number").length + 1;
-      annoWork.push({ id: uid(), type: "number", x: nx, y: ny, n, color: annoColor }); setSel([annoWork.length - 1]);
+      annoWork.push({ id: uid(), type: "number", x: nx, y: ny, n, size: annoStampSize, style: annoStampStyle, color: annoColor }); setSel([annoWork.length - 1]);
       pushHistory(); redraw(); return;   // number tool stays active
     }
     if (annoTool === "text") {
@@ -1508,6 +1946,9 @@
       const left = A.corner.includes("e") ? A.ax : A.ax - pb.w;
       const top = A.corner.includes("s") ? A.ay : A.ay - pb.h;
       a.x = D2NX(left); a.y = D2NY(top);
+    } else if (A.kind === "resizeStamp") {
+      const a = annoWork[A.i], k = annoImgRect.w / 560;
+      a.size = annoStampSize = Math.max(8, Math.hypot(dx - A.cx, dy - A.cy) / (k || 1));
     }
     redraw();
   }
@@ -1532,7 +1973,7 @@
       resetToSelect(); redraw(); return;
     }
     if (A.kind === "band") { updateToolbar(); redraw(); return; }
-    if (A.kind === "resize" || A.kind === "resizeText") { pushHistory(); redraw(); return; }
+    if (A.kind === "resize" || A.kind === "resizeText" || A.kind === "resizeStamp") { pushHistory(); redraw(); return; }
     if (A.kind === "endpoint") { pinEndpointIfOver(annoWork[A.i], A.end); pushHistory(); redraw(); return; }
     if (A.kind === "arrowHandle") { pinEndpointIfOver(annoWork[A.i], A.end); pushHistory(); resetToSelect(); redraw(); return; }
     if (A.kind === "move") { pushHistory(); redraw(); return; }
@@ -1559,7 +2000,7 @@
     toolbar.append(h("span", { class: "sep" }));
     // Floating color popover (mounted over the canvas, always shown while editing). Carries the
     // global palette for shapes; swaps to Text/Fill rows when a label is the active context.
-    const swatchEls = [], fgSwatches = [], bgSwatches = [];
+    const swatchEls = [], fgSwatches = [], bgSwatches = [], stampChips = [];
     const globalSwatches = h("div", { class: "tp-swatches" });
     COLORS.forEach((c) => {
       const s = h("button", { class: "swatch", style: `background:${c}`, title: c, onclick: () => { annoColor = c; const idx = selArr().filter((i) => annoWork[i] && annoWork[i].type !== "text"); if (idx.length) { idx.forEach((i) => (annoWork[i].color = c)); pushHistory(); } updateColors(); redraw(); } });
@@ -1575,7 +2016,14 @@
     };
     const fgRow = colorRow("Text", "fg", "auto", "Auto", fgSwatches);
     const bgRow = colorRow("Fill", "bg", "none", "None", bgSwatches);
-    const textPop = h("div", { class: "text-pop" }, globalRow, fgRow, bgRow);
+    const stampRow = h("div", { class: "tp-row" },
+      h("span", { class: "lbl" }, "Stamp"),
+      h("div", { class: "tp-swatches" },
+        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("numbers") }, "123"); b._style = "numbers"; stampChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("letters") }, "ABC"); b._style = "letters"; stampChips.push(b); return b; })(),
+      ),
+    );
+    const textPop = h("div", { class: "text-pop" }, globalRow, stampRow, fgRow, bgRow);
     const undoBtn = h("button", { class: "tool", title: "Undo", onclick: undo }, "↶ Undo", h("span", { class: "kbd" }, "⌘Z"));
     const redoBtn = h("button", { class: "tool", title: "Redo", onclick: redo }, "↷ Redo", h("span", { class: "kbd" }, "⌘⇧Z"));
     const delBtn = h("button", { class: "tool", title: "Delete selected", onclick: deleteSel }, "🗑 Delete", h("span", { class: "kbd" }, "Del"));
@@ -1593,7 +2041,7 @@
       const { dx, dy } = evtPos(e);
       for (let i = annoWork.length - 1; i >= 0; i--) { if (annoWork[i].type === "text" && annoHit(annoWork[i], dx, dy)) { setSel([i]); startTextEdit(i, false); redraw(); return; } }
     });
-    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, fgRow, bgRow, fgSwatches, bgSwatches, undoBtn, redoBtn, delBtn, ctx: canvas.getContext("2d") };
+    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, stampRow, stampChips, fgRow, bgRow, fgSwatches, bgSwatches, undoBtn, redoBtn, delBtn, ctx: canvas.getContext("2d") };
   }
   function ensureModal() {
     if (modalEls) return modalEls;
@@ -1624,8 +2072,8 @@
   // (normalized to the image) map through annoImgRect, so they pan/zoom with it for free.
   function setViewport() {
     const m = editorHost;
-    annoDispW = Math.round(Math.min(window.innerWidth - 80, 1100));
-    annoDispH = Math.round(window.innerHeight * 0.62);
+    annoDispW = Math.round(Math.min(window.innerWidth * 0.92, 1500));
+    annoDispH = Math.round(window.innerHeight * 0.76);
     annoDPR = window.devicePixelRatio || 1;
     m.canvas.width = annoDispW * annoDPR; m.canvas.height = annoDispH * annoDPR;
     m.canvas.style.width = annoDispW + "px"; m.canvas.style.height = annoDispH + "px";
@@ -1654,7 +2102,12 @@
   function startEditing(slot) {
     annoSlot = slot;
     annoWork = cloneAnns(slot.annotations); annoWork.forEach((a) => { if (!a.id) a.id = uid(); });
-    annoTool = "select"; annoColor = "#ef4444"; annoTextBg = "none"; setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false;
+    const stamps = annoWork.filter((a) => a.type === "number");
+    const lastStamp = stamps[stamps.length - 1];
+    annoTool = "select"; annoColor = "#ef4444"; annoTextBg = "none";
+    annoStampStyle = (lastStamp && lastStamp.style) || "numbers";
+    annoStampSize = (lastStamp && lastStamp.size) || 20;
+    setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false;
     annoHist = []; annoHistIdx = -1; pushHistory();
     setViewport(); fitView();
     editorHost.input.style.display = "none";
@@ -1672,8 +2125,9 @@
     modalEls.backdrop.classList.remove("open");
     if (commit && annoSlot) {
       annoSlot.annotations = annoWork;
+      refreshSlot(annoSlot);
       if (annoBtnRef) annoBtnRef.textContent = annoLabel(annoSlot);
-      drawPreview();
+      renderActivePreview();
     }
     annoSlot = null; annoBtnRef = null; editorHost = null;
   }
@@ -1717,25 +2171,29 @@
   const TAB_INFO = {
     ba: { title: "Before / After Builder", sub: "Compose before/after screenshots into a single shareable PNG — entirely in your browser, nothing uploaded." },
     anno: { title: "Annotator", sub: "Annotate a screenshot with boxes, arrows, numbers and labels, then export it — entirely in your browser, nothing uploaded." },
+    tut: { title: "Tutorial Builder", sub: "Upload, annotate and reorder screenshots into a numbered tutorial — entirely in your browser, nothing uploaded." },
   };
-  // ---------- hash routing: each tool gets its own URL (#/before-after, #/annotator) ----------
-  const TAB_SLUG = { ba: "before-after", anno: "annotator" };
-  const slugToTab = (s) => (s === "annotator" ? "anno" : s === "before-after" ? "ba" : null);
+  // ---------- hash routing: each tool gets its own URL (#/before-after, #/annotator, #/tutorial) ----------
+  const TAB_SLUG = { ba: "before-after", anno: "annotator", tut: "tutorial" };
+  const slugToTab = (s) => (s === "annotator" ? "anno" : s === "before-after" ? "ba" : s === "tutorial" ? "tut" : null);
   const tabFromHash = () => slugToTab(location.hash.replace(/^#\/?/, ""));
   // Navigate to a tab by updating the URL; the hashchange listener applies it (so back/forward work).
   function navTo(t) {
-    const want = "#/" + TAB_SLUG[t === "anno" ? "anno" : "ba"];
-    if (location.hash === want) showTab(t);   // hash already correct → no hashchange fires, apply directly
+    const tab = TAB_INFO[t] ? t : "ba";
+    const want = "#/" + TAB_SLUG[tab];
+    if (location.hash === want) showTab(tab); // hash already correct → no hashchange fires, apply directly
     else location.hash = want;                // changing the hash triggers hashchange → showTab
   }
   function showTab(t) {
-    currentTab = t === "anno" ? "anno" : "ba";
+    currentTab = TAB_INFO[t] ? t : "ba";
     document.getElementById("tab-ba").hidden = currentTab !== "ba";
     document.getElementById("tab-anno").hidden = currentTab !== "anno";
+    document.getElementById("tab-tut").hidden = currentTab !== "tut";
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === currentTab));
     document.getElementById("modeTitle").textContent = TAB_INFO[currentTab].title;
     document.getElementById("modeSub").textContent = TAB_INFO[currentTab].sub;
     currentTab === "anno" ? enterAnnotator() : leaveAnnotator();
+    if (currentTab === "tut") drawTutorialPreview();
     scheduleSave();
   }
 
@@ -1806,6 +2264,11 @@
   bind("layout", (e) => { state.layout = e.target.value; drawPreview(); });
   document.getElementById("dateEnabled").addEventListener("change", (e) => { state.dateEnabled = e.target.checked; drawPreview(); });
   bind("dateText", (e) => { state.dateText = e.target.value; drawPreview(); });
+  bind("tutTitle", (e) => { state.tutorial.title = e.target.value; drawTutorialPreview(); });
+  bind("tutBg", (e) => { state.tutorial.bg = e.target.value; drawTutorialPreview(); });
+  bind("tutScale", (e) => { state.tutorial.scale = Number(e.target.value); drawTutorialPreview(); });
+  bind("tutLayout", (e) => { state.tutorial.layout = e.target.value; drawTutorialPreview(); });
+  bind("tutNumbering", (e) => { state.tutorial.numbering = e.target.value === "letters" ? "letters" : "numbers"; drawTutorialPreview(); });
   const addChangeBtn = document.getElementById("addChange");
   addChangeBtn.addEventListener("click", () => { state.changes.push(newChange()); buildEditor(); drawPreview(); });
   addChangeBtn.addEventListener("dragover", (e) => { e.preventDefault(); addChangeBtn.classList.add("drag"); });
@@ -1816,10 +2279,20 @@
     if (files.length) dropAddChange(files);
   });
   document.getElementById("reset").addEventListener("click", resetAll);
-  document.getElementById("saveProject").addEventListener("click", saveProject);
+  document.getElementById("saveProject").addEventListener("click", () => saveProject(state.title));
   const openInput = document.getElementById("openProjectInput");
   document.getElementById("openProject").addEventListener("click", () => openInput.click());
+  document.getElementById("tutOpenProject").addEventListener("click", () => openInput.click());
   openInput.addEventListener("change", (e) => { openProjectFile(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("tutSaveProject").addEventListener("click", () => saveProject(state.tutorial.title || "tutorial"));
+  document.getElementById("tutReset").addEventListener("click", resetTutorial);
+  const tutFiles = document.getElementById("tutFiles");
+  document.getElementById("tutBrowse").addEventListener("click", () => tutFiles.click());
+  tutFiles.addEventListener("change", (e) => { addTutorialFiles(e.target.files); e.target.value = ""; });
+  document.getElementById("addTutorialStep").addEventListener("click", () => {
+    state.tutorial.steps.push(newTutorialStep());
+    buildTutorialEditor(); drawTutorialPreview();
+  });
 
   function updateColTags() {
     document.querySelectorAll(".img-col.before .col-tag").forEach((e) => e.textContent = state.beforeLabel || "Before");
@@ -1829,6 +2302,7 @@
   // ---------- tab + annotator wiring ----------
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => navTo(b.dataset.tab)));
   window.addEventListener("hashchange", () => showTab(tabFromHash() || currentTab));
+  window.addEventListener("resize", refreshAllSlotAnnotations);
   const annoFile = document.getElementById("annoFile");
   document.getElementById("annoBrowse").addEventListener("click", () => annoFile.click());
   document.getElementById("annoReplace").addEventListener("click", () => annoFile.click());
@@ -1841,9 +2315,12 @@
   // ---------- init ----------
   const restored = loadSaved();
   syncControls();
+  syncTutorialControls();
   buildBarActions();
   buildAnnoActions();
+  buildTutorialActions();
   buildEditor();
+  buildTutorialEditor();
   if (restored) { hydrateImages(); hydrateAnno(); }
   // The URL hash (if any) wins over the saved tab — so a shared #/annotator link opens the right tool.
   const initialTab = tabFromHash() || currentTab;
@@ -1851,6 +2328,7 @@
   if (location.hash !== wantHash) history.replaceState(null, "", wantHash);   // canonicalize without adding history
   showTab(initialTab);
   drawPreview();
+  drawTutorialPreview();
 })();
 </script>
 </body>
