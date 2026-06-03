@@ -1,10 +1,13 @@
 import { annoDoc, getCurrentTab, loadProject as applyProject, loadSaved, newChange, newTutorialStep, resetAll as resetAllState, resetTutorial as resetTutorialState, setCurrentTab, state, syncControls, syncTutorialControls } from './state.js';
+import { mountShell } from './shell.js';
 import { buildEditor, configureBeforeAfterEditor } from './before-after-editor.js';
 import { addTutorialFiles, buildTutorialEditor, configureTutorialEditor } from './tutorial-editor.js';
 import { configureImageHooks, dropAddChange, imageFiles, refreshAllSlotAnnotations, refreshSlot } from './images.js';
-import { buildAnnoActions, configureAnnotator, hydrateAnno, isAnnotatorTextEditing, loadAnnoFile, navTo, showTab, TAB_SLUG, tabFromHash } from './annotator.js';
+import { buildAnnoActions, configureAnnotator, hydrateAnno, isAnnotatorTextEditing, loadAnnoFile, navTo, showTab, tabFromLocation } from './annotator.js';
 import { buildBarActions, buildTutorialActions, configureExport, drawPreview, drawTutorialPreview, openProjectFile, saveProject } from './export.js';
 import { hydrateImages as hydrateImagesState } from './state.js';
+
+mountShell();
 
 function hydrateImages() {
   hydrateImagesState({ refreshSlot, drawPreview, drawTutorialPreview });
@@ -80,7 +83,7 @@ function updateColTags() {
 
 // ---------- tab + annotator wiring ----------
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => navTo(b.dataset.tab)));
-window.addEventListener('hashchange', () => showTab(tabFromHash() || getCurrentTab()));
+window.addEventListener('popstate', () => showTab(tabFromLocation() || getCurrentTab()));
 window.addEventListener('resize', refreshAllSlotAnnotations);
 const annoFile = document.getElementById('annoFile');
 document.getElementById('annoBrowse').addEventListener('click', () => annoFile.click());
@@ -101,10 +104,8 @@ buildTutorialActions();
 buildEditor();
 buildTutorialEditor();
 if (restored) { hydrateImages(); hydrateAnno(); }
-// The URL hash (if any) wins over the saved tab, so a shared #/annotator link opens the right tool.
-const initialTab = tabFromHash() || getCurrentTab();
-const wantHash = '#/' + TAB_SLUG[initialTab];
-if (location.hash !== wantHash) history.replaceState(null, '', wantHash);
+// The URL wins over the saved tab, so a shared /annotator/ link opens the right tool.
+const initialTab = tabFromLocation() || getCurrentTab();
 showTab(initialTab);
 drawPreview();
 drawTutorialPreview();

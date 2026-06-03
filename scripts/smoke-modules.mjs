@@ -63,7 +63,7 @@ globalThis.window = {
   innerWidth: 1200,
   innerHeight: 800,
 };
-globalThis.location = { hash: "" };
+globalThis.location = { hash: "", pathname: "/" };
 globalThis.history = { replaceState: noop };
 globalThis.sessionStorage = {
   getItem: () => null,

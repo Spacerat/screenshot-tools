@@ -739,16 +739,36 @@ export const TAB_INFO = {
   anno: { title: "Annotator", sub: "Annotate a screenshot with boxes, arrows, numbers and labels, then export it — entirely in your browser, nothing uploaded." },
   tut: { title: "Tutorial Builder", sub: "Upload, annotate and reorder screenshots into a numbered tutorial — entirely in your browser, nothing uploaded." },
 };
-// ---------- hash routing: each tool gets its own URL (#/before-after, #/annotator, #/tutorial) ----------
+// ---------- path routing: each tool gets its own clean URL (/before-after/, /annotator/, /tutorial/) ----------
 export const TAB_SLUG = { ba: "before-after", anno: "annotator", tut: "tutorial" };
 const slugToTab = (s) => (s === "annotator" ? "anno" : s === "before-after" ? "ba" : s === "tutorial" ? "tut" : null);
 export const tabFromHash = () => slugToTab(location.hash.replace(/^#\/?/, ""));
-// Navigate to a tab by updating the URL; the hashchange listener applies it (so back/forward work).
+export function tabFromPath(pathname = location.pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  const last = parts.at(-1);
+  if (last === "index.html") return slugToTab(parts.at(-2));
+  return slugToTab(last);
+}
+export const tabFromLocation = () => tabFromPath() || tabFromHash();
+function routeBasePath() {
+  let path = location.pathname;
+  if (!path.endsWith("/")) path = path.replace(/[^/]*$/, "");
+  const parts = path.split("/").filter(Boolean);
+  if (slugToTab(parts.at(-1))) parts.pop();
+  return `/${parts.join("/")}${parts.length ? "/" : ""}`;
+}
+function routePath(tab) {
+  return `${routeBasePath()}${TAB_SLUG[tab]}/`;
+}
+// Navigate to a tab by updating the path; the popstate listener handles browser back/forward.
 export function navTo(t) {
   const tab = TAB_INFO[t] ? t : "ba";
-  const want = "#/" + TAB_SLUG[tab];
-  if (location.hash === want) showTab(tab); // hash already correct → no hashchange fires, apply directly
-  else location.hash = want;                // changing the hash triggers hashchange → showTab
+  const want = routePath(tab);
+  if (location.pathname === want) showTab(tab);
+  else {
+    history.pushState(null, "", want);
+    showTab(tab);
+  }
 }
 export function showTab(t) {
   setCurrentTab(TAB_INFO[t] ? t : "ba");

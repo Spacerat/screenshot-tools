@@ -10,9 +10,10 @@ Fully vibecoded! Only this README section was written by hand.
 
 A dependency-free static app with two tools, switchable via tabs. Everything runs in your browser — no build step, no uploads.
 
-Each tool has its own URL via hash routing, so you can deep-link or share a link straight to a tool: `#/before-after` and `#/annotator`.
+Each tool has its own clean URL, so you can deep-link or share a link straight to a tool: `/before-after/`, `/annotator/`, and `/tutorial/`.
+Those route pages are tiny static shells for GitHub Pages; the shared UI and behavior live in `src/`.
 
-**Live:** https://veryjoe.com/screenshot-tools/ ([Annotator](https://veryjoe.com/screenshot-tools/#/annotator))
+**Live:** https://veryjoe.com/screenshot-tools/ ([Annotator](https://veryjoe.com/screenshot-tools/annotator/))
 
 ## Before / After
 

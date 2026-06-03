@@ -1,0 +1,177 @@
+export function mountShell(target = document.getElementById("app-shell")) {
+  if (!target) throw new Error("Missing #app-shell mount point");
+  target.innerHTML = `
+<h1 class="sr-only" id="modeTitle">Before / After Builder</h1>
+<nav class="tabs">
+  <button class="tab active" data-tab="anno">✎ Annotator</button>
+  <button class="tab" data-tab="ba">◧ Before / After</button>
+  <button class="tab" data-tab="tut">① Tutorial</button>
+</nav>
+<p class="sub" id="modeSub">Compose before/after screenshots into a single shareable PNG — entirely in your browser, nothing uploaded.</p>
+
+<div id="tab-ba">
+<div class="app">
+  <section class="editor">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Document</h2>
+        <button id="reset" class="ghost tiny" title="Clear everything and start over">↺ Reset all</button>
+      </div>
+      <div class="field">
+        <label for="title">Title</label>
+        <input type="text" id="title" placeholder="e.g. Checkout redesign — Q2">
+      </div>
+      <div class="field row">
+        <div>
+          <label for="beforeLabel">“Before” label</label>
+          <input type="text" id="beforeLabel" value="BEFORE">
+        </div>
+        <div>
+          <label for="afterLabel">“After” label</label>
+          <input type="text" id="afterLabel" value="AFTER">
+        </div>
+      </div>
+      <div class="field row">
+        <div>
+          <label for="bg">Background</label>
+          <input type="color" id="bg" value="#ffffff">
+        </div>
+        <div>
+          <label for="scale">Export quality</label>
+          <select id="scale">
+            <option value="1">1× (standard)</option>
+            <option value="2" selected>2× (crisp)</option>
+            <option value="3">3× (high-res)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field row">
+        <div>
+          <label for="layout">Layout</label>
+          <select id="layout">
+            <option value="vertical" selected>Vertical (top to bottom)</option>
+            <option value="horizontal">Horizontal (left to right)</option>
+          </select>
+        </div>
+        <div>
+          <label for="dateText">Date / footer stamp</label>
+          <div class="date-row">
+            <input type="checkbox" id="dateEnabled" title="Show date / footer">
+            <input type="text" id="dateText" placeholder="e.g. May 26, 2026">
+          </div>
+        </div>
+      </div>
+      <div class="field doc-actions">
+        <button id="saveProject" title="Download an editable project file (images included)">💾 Save project</button>
+        <button id="openProject" title="Open a previously saved project file">📂 Open project</button>
+        <input type="file" id="openProjectInput" accept="application/json,.json" style="display:none">
+      </div>
+    </div>
+
+    <div id="changes"></div>
+    <button id="addChange" class="add-change">+ Add change</button>
+  </section>
+
+  <aside class="preview">
+    <div class="preview-bar">
+      <div class="preview-meta">
+        <span id="dims" class="dims"></span>
+      </div>
+      <div class="bar-actions" id="barActions"></div>
+    </div>
+    <div class="canvas-wrap" id="previewWrap">
+      <canvas id="preview"></canvas>
+    </div>
+  </aside>
+</div>
+</div>
+
+<div id="tab-tut" hidden>
+<div class="app">
+  <section class="editor">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Tutorial</h2>
+        <button id="tutReset" class="ghost tiny" title="Clear the tutorial and start over">↺ Reset tutorial</button>
+      </div>
+      <div class="field">
+        <label for="tutTitle">Title</label>
+        <input type="text" id="tutTitle" placeholder="e.g. How to create a report">
+      </div>
+      <div class="field row">
+        <div>
+          <label for="tutBg">Background</label>
+          <input type="color" id="tutBg" value="#ffffff">
+        </div>
+        <div>
+          <label for="tutScale">Export quality</label>
+          <select id="tutScale">
+            <option value="1">1× (standard)</option>
+            <option value="2" selected>2× (crisp)</option>
+            <option value="3">3× (high-res)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field row">
+        <div>
+          <label for="tutLayout">Layout</label>
+          <select id="tutLayout">
+            <option value="vertical" selected>Vertical (top to bottom)</option>
+            <option value="horizontal">Horizontal (left to right)</option>
+          </select>
+        </div>
+        <div>
+          <label for="tutNumbering">Step labels</label>
+          <select id="tutNumbering">
+            <option value="numbers" selected>Numbers (1, 2, 3)</option>
+            <option value="letters">Letters (A, B, C)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="tutFiles">Images</label>
+        <button id="tutBrowse" style="width:100%">Upload images</button>
+        <input type="file" id="tutFiles" accept="image/*" multiple hidden>
+      </div>
+      <div class="field doc-actions">
+        <button id="tutSaveProject" title="Download an editable project file (images included)">💾 Save project</button>
+        <button id="tutOpenProject" title="Open a previously saved project file">📂 Open project</button>
+      </div>
+    </div>
+
+    <div id="tutorialSteps"></div>
+    <button id="addTutorialStep" class="add-change">+ Add step</button>
+  </section>
+
+  <aside class="preview">
+    <div class="preview-bar">
+      <div class="preview-meta">
+        <span id="tutDims" class="dims"></span>
+      </div>
+      <div class="bar-actions" id="tutActions"></div>
+    </div>
+    <div class="canvas-wrap" id="tutPreviewWrap">
+      <canvas id="tutPreview"></canvas>
+    </div>
+  </aside>
+</div>
+</div>
+
+<div id="tab-anno" hidden>
+  <div class="anno-page">
+    <div id="annoDrop" class="anno-drop">
+      <div class="anno-drop-title">Annotate an image</div>
+      <p>Drop an image here, paste from your clipboard, or
+        <button id="annoBrowse" class="linkish">browse</button>.</p>
+      <input type="file" id="annoFile" accept="image/*" hidden>
+    </div>
+    <div id="annoEditor" class="anno-editor" hidden></div>
+    <div id="annoFoot" class="anno-foot" hidden>
+      <button id="annoReplace">↻ Replace image</button>
+      <div class="bar-actions" id="annoActions"></div>
+    </div>
+  </div>
+</div>
+
+`;
+}
