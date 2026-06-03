@@ -8,9 +8,9 @@ Fully vibecoded! Only this README section was written by hand.
 
 # Vibecoded README
 
-A single, dependency-free HTML file (`index.html`) with two tools, switchable via tabs. Everything runs in your browser — no server, no build step, no uploads.
+A dependency-free static app with two tools, switchable via tabs. Everything runs in your browser — no build step, no uploads.
 
-Each tool has its own URL via hash routing, so you can deep-link or share a link straight to a tool: `#/before-after` and `#/annotator`. (No server config needed — it stays a single static file.)
+Each tool has its own URL via hash routing, so you can deep-link or share a link straight to a tool: `#/before-after` and `#/annotator`.
 
 **Live:** https://veryjoe.com/screenshot-tools/ ([Annotator](https://veryjoe.com/screenshot-tools/#/annotator))
 
@@ -35,7 +35,13 @@ The annotation editor is shared between both tools — the Before/After **Annota
 
 ## Usage
 
-Open `index.html` in any modern browser, or use the hosted version linked above.
+Serve the folder locally, then open the printed URL:
+
+```sh
+python3 -m http.server
+```
+
+You can also use the hosted version linked above.
 
 ## License
 
