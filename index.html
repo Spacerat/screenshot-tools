@@ -134,7 +134,7 @@
   .tool.active{background:var(--accent);color:#fff;border-color:var(--accent)}
   .kbd{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:5px;background:rgba(15,23,42,.08);color:var(--muted);font-size:10px;font-weight:700;line-height:1.4;vertical-align:middle}
   .tool.active .kbd{background:rgba(255,255,255,.25);color:#fff}
-  .swatch{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+  .swatch{position:relative;width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
   .swatch.active{box-shadow:0 0 0 2px var(--accent)}
   .text-pop{position:absolute;top:12px;left:12px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.22);padding:12px;display:flex;flex-direction:column;gap:8px}
   .tp-row{display:flex;align-items:center;gap:9px;min-height:30px}
@@ -143,6 +143,17 @@
   .chip{padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer}
   .chip:hover{background:#f8fafc}
   .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .kbd-acc{text-decoration:underline;text-underline-offset:2px}
+  /* radiogroup focus: the focused value group gets an accent ring; its focused value a stronger one */
+  .tp-row{border-radius:8px;box-shadow:0 0 0 1px transparent;transition:box-shadow .1s}
+  .tp-row:focus-within{box-shadow:0 0 0 2px var(--accent)}
+  .tp-row:focus-within .lbl{color:var(--accent)}
+  .chip:focus-visible{outline:none;box-shadow:0 0 0 2px var(--accent)}
+  .swatch:focus-visible{outline:none;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent)}
+  /* while a property's letter is held, its values reveal 1…N badges for the digit chord */
+  .vidx{display:none}
+  .tp-row.chordable .chip .vidx{display:inline-block;margin-left:5px;font-size:9px;font-weight:800;opacity:.55}
+  .tp-row.chordable .swatch .vidx{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)}
   .modal-canvas-wrap{position:relative;padding:16px;overflow:auto;background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:0}
   .anno-canvas{display:block;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.15);touch-action:none}
   .anno-canvas.draw{cursor:crosshair}
@@ -1637,10 +1648,10 @@
     annoHist.push(cloneAnns(annoWork));
     if (annoHist.length > 80) annoHist.shift();
     annoHistIdx = annoHist.length - 1;
-    updateUndoRedo(); commitLive();
+    commitLive();
   }
-  function undo() { if (annoHistIdx <= 0) return; annoHistIdx--; annoWork = cloneAnns(annoHist[annoHistIdx]); setSel([]); redraw(); updateUndoRedo(); commitLive(); }
-  function redo() { if (annoHistIdx >= annoHist.length - 1) return; annoHistIdx++; annoWork = cloneAnns(annoHist[annoHistIdx]); setSel([]); redraw(); updateUndoRedo(); commitLive(); }
+  function undo() { if (annoHistIdx <= 0) return; annoHistIdx--; annoWork = cloneAnns(annoHist[annoHistIdx]); setSel([]); redraw(); commitLive(); }
+  function redo() { if (annoHistIdx >= annoHist.length - 1) return; annoHistIdx++; annoWork = cloneAnns(annoHist[annoHistIdx]); setSel([]); redraw(); commitLive(); }
 
   // ----- removal (bakes pinned arrow ends so they don't jump) -----
   function removeAnns(indices) {
@@ -1664,7 +1675,6 @@
     const m = editorHost; if (!m) return;
     Object.entries(m.toolBtns).forEach(([id, b]) => b.classList.toggle("active", id === annoTool));
     m.canvas.classList.toggle("draw", annoTool !== "select");
-    m.delBtn.disabled = annoSel.size === 0;
   }
   function updateColors() { editorHost && editorHost.swatchEls.forEach((s) => s.classList.toggle("active", s._c === annoColor)); }
   const selectedAnns = (types) => selArr().map((i) => annoWork[i]).filter((a) => a && types.includes(a.type));
@@ -1739,14 +1749,10 @@
       m.lineStyleChips.forEach((s) => s.classList.toggle("active", s._style === curLineStyle()));
       m.lineWidthChips.forEach((s) => s.classList.toggle("active", s._width === curLineWidth()));
     }
+    syncRadios();   // keep aria-checked + roving tabindex in sync as values/contexts change
+    updateChordUI();   // and the held-letter value badges
   }
-  function updateUndoRedo() {
-    const m = editorHost; if (!m) return;
-    m.undoBtn.disabled = annoHistIdx <= 0;
-    m.redoBtn.disabled = annoHistIdx >= annoHist.length - 1;
-    m.delBtn.disabled = annoSel.size === 0;
-  }
-  function setTool(id) { annoTool = id; if (id !== "select") setSel([]); updateToolbar(); redraw(); }
+  function setTool(id) { annoTool = id; if (id !== "select") setSel([]); disarmProps(); updateToolbar(); redraw(); }
 
   // ----- handles for the single selected annotation -----
   function selHandles() {
@@ -2041,51 +2047,57 @@
     toolbar.append(h("span", { class: "sep" }));
     // Floating brush popover (mounted over the canvas). Shared color plus contextual options.
     const swatchEls = [], textBgChips = [], stampChips = [], lineStyleChips = [], lineWidthChips = [];
+    // Property label with its access-key letter underlined. Tap the letter to focus this group (then ←/→/Space), or hold it + a digit to pick the Nth value.
+    const lbl = (t) => h("span", { class: "lbl", title: `Tap "${t[0].toLowerCase()}" then ←/→, or hold "${t[0].toLowerCase()}" + 1–9` }, h("span", { class: "kbd-acc" }, t[0]), t.slice(1));
     const globalSwatches = h("div", { class: "tp-swatches" });
-    COLORS.forEach((c) => {
-      const s = h("button", { class: "swatch", style: `background:${c}`, title: c, onclick: () => applyColor(c) });
+    const COLOR_NAMES = { "#ef4444": "Red", "#f59e0b": "Amber", "#22c55e": "Green", "#3b82f6": "Blue", "#a855f7": "Purple", "#111827": "Black", "#ffffff": "White" };
+    COLORS.forEach((c, i) => {
+      const s = h("button", { class: "swatch", style: `background:${c}`, title: c, "aria-label": COLOR_NAMES[c] || c, onclick: () => applyColor(c) }, h("span", { class: "vidx" }, String(i + 1)));
       s._c = c; swatchEls.push(s); globalSwatches.append(s);
     });
-    const globalRow = h("div", { class: "tp-row" }, h("span", { class: "lbl" }, "Color"), globalSwatches);
+    const globalRow = h("div", { class: "tp-row" }, lbl("Color"), globalSwatches);
     const textBgRow = h("div", { class: "tp-row" },
-      h("span", { class: "lbl" }, "Background"),
+      lbl("Background"),
       h("div", { class: "tp-swatches" },
-        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(false) }, "Transparent"); b._on = false; textBgChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(true) }, "Opaque"); b._on = true; textBgChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(false) }, "Transparent", h("span", { class: "vidx" }, "1")); b._on = false; textBgChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyTextBg(true) }, "Opaque", h("span", { class: "vidx" }, "2")); b._on = true; textBgChips.push(b); return b; })(),
       ),
     );
     const stampRow = h("div", { class: "tp-row" },
-      h("span", { class: "lbl" }, "Stamp"),
+      lbl("Stamp"),
       h("div", { class: "tp-swatches" },
-        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("numbers") }, "123"); b._style = "numbers"; stampChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("letters") }, "ABC"); b._style = "letters"; stampChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("numbers") }, "123", h("span", { class: "vidx" }, "1")); b._style = "numbers"; stampChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyStampStyle("letters") }, "ABC", h("span", { class: "vidx" }, "2")); b._style = "letters"; stampChips.push(b); return b; })(),
       ),
     );
     const lineStyleRow = h("div", { class: "tp-row" },
-      h("span", { class: "lbl" }, "Style"),
+      lbl("Style"),
       h("div", { class: "tp-swatches" },
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("solid") }, "Line"); b._style = "solid"; lineStyleChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dashed") }, "Dash"); b._style = "dashed"; lineStyleChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dotted") }, "Dot"); b._style = "dotted"; lineStyleChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("solid") }, "Line", h("span", { class: "vidx" }, "1")); b._style = "solid"; lineStyleChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dashed") }, "Dash", h("span", { class: "vidx" }, "2")); b._style = "dashed"; lineStyleChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineStyle("dotted") }, "Dot", h("span", { class: "vidx" }, "3")); b._style = "dotted"; lineStyleChips.push(b); return b; })(),
       ),
     );
     const lineWidthRow = h("div", { class: "tp-row" },
-      h("span", { class: "lbl" }, "Width"),
+      lbl("Width"),
       h("div", { class: "tp-swatches" },
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("small") }, "S"); b._width = "small"; lineWidthChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("medium") }, "M"); b._width = "medium"; lineWidthChips.push(b); return b; })(),
-        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("large") }, "L"); b._width = "large"; lineWidthChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("small") }, "S", h("span", { class: "vidx" }, "1")); b._width = "small"; lineWidthChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("medium") }, "M", h("span", { class: "vidx" }, "2")); b._width = "medium"; lineWidthChips.push(b); return b; })(),
+        (() => { const b = h("button", { class: "chip", onclick: () => applyLineWidth("large") }, "L", h("span", { class: "vidx" }, "3")); b._width = "large"; lineWidthChips.push(b); return b; })(),
       ),
     );
     const textPop = h("div", { class: "text-pop" }, globalRow, textBgRow, stampRow, lineStyleRow, lineWidthRow);
-    const undoBtn = h("button", { class: "tool", title: "Undo", onclick: undo }, "↶ Undo", h("span", { class: "kbd" }, "⌘Z"));
-    const redoBtn = h("button", { class: "tool", title: "Redo", onclick: redo }, "↷ Redo", h("span", { class: "kbd" }, "⌘⇧Z"));
-    const delBtn = h("button", { class: "tool", title: "Delete selected", onclick: deleteSel }, "🗑 Delete", h("span", { class: "kbd" }, "Del"));
+    makeRadioGroup(globalSwatches, swatchEls, "Color");
+    makeRadioGroup(textBgRow.querySelector(".tp-swatches"), textBgChips, "Text background");
+    makeRadioGroup(stampRow.querySelector(".tp-swatches"), stampChips, "Stamp style");
+    makeRadioGroup(lineStyleRow.querySelector(".tp-swatches"), lineStyleChips, "Line style");
+    makeRadioGroup(lineWidthRow.querySelector(".tp-swatches"), lineWidthChips, "Line width");
+    // Undo/redo/delete are keyboard-only (⌘Z / ⌘⇧Z / Del) — no toolbar buttons.
     const clrBtn = h("button", { class: "tool", onclick: clearAnno }, "Clear all");
     const zoomOutBtn = h("button", { class: "tool", title: "Zoom out", onclick: () => zoomBy(1 / 1.25) }, "−");
     const fitBtn = h("button", { class: "tool", title: "Fit image to view", onclick: () => { fitView(); redraw(); } }, "⤢ Fit");
     const zoomInBtn = h("button", { class: "tool", title: "Zoom in", onclick: () => zoomBy(1.25) }, "+");
-    toolbar.append(undoBtn, redoBtn, delBtn, clrBtn, h("span", { class: "sep" }), zoomOutBtn, fitBtn, zoomInBtn);
+    toolbar.append(clrBtn, h("span", { class: "sep" }), zoomOutBtn, fitBtn, zoomInBtn);
     canvas.addEventListener("pointerdown", onAnnoDown);
     canvas.addEventListener("pointermove", onAnnoMove);
     canvas.addEventListener("pointerup", onAnnoUp);
@@ -2095,7 +2107,7 @@
       const { dx, dy } = evtPos(e);
       for (let i = annoWork.length - 1; i >= 0; i--) { if (annoWork[i].type === "text" && annoHit(annoWork[i], dx, dy)) { setSel([i]); startTextEdit(i, false); redraw(); return; } }
     });
-    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, textBgRow, textBgChips, stampRow, stampChips, lineStyleRow, lineStyleChips, lineWidthRow, lineWidthChips, undoBtn, redoBtn, delBtn, ctx: canvas.getContext("2d") };
+    return { canvas, input, toolbar, toolBtns, swatchEls, textPop, globalRow, textBgRow, textBgChips, stampRow, stampChips, lineStyleRow, lineStyleChips, lineWidthRow, lineWidthChips, ctx: canvas.getContext("2d") };
   }
   function ensureModal() {
     if (modalEls) return modalEls;
@@ -2168,11 +2180,11 @@
     annoLineWidth = (lastLine && lastLine.lineWidth) || "medium";
     annoStampStyle = (lastStamp && lastStamp.style) || "numbers";
     annoStampSize = (lastStamp && lastStamp.size) || 20;
-    setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false;
+    setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false; disarmProps();
     annoHist = []; annoHistIdx = -1; pushHistory();
     setViewport(); fitView();
     editorHost.input.style.display = "none";
-    updateToolbar(); updateColors(); updateUndoRedo(); redraw();
+    updateToolbar(); updateColors(); redraw();
   }
   function openAnnotator(slot, btn) {   // modal (Before/After "Annotate")
     if (!slot.img) return;
@@ -2200,19 +2212,87 @@
   // in the inline tab, edits apply to the document immediately (no Done step)
   function commitLive() { if (editorHost && editorHost.live && annoSlot) { annoSlot.annotations = cloneAnns(annoWork); scheduleSave(); } }
 
+  // Each value group is an ARIA radiogroup: role=radio + aria-checked + roving tabindex, so once a
+  // value has focus, ←/→/↑/↓/Home/End/Space navigate it the standard, accessible way, and the whole
+  // group is a single tab stop. (stopPropagation keeps Space selecting instead of toggling pan.)
+  function makeRadioGroup(container, buttons, label) {
+    container.setAttribute("role", "radiogroup");
+    container.setAttribute("aria-label", label);
+    buttons.forEach((b) => { b.setAttribute("role", "radio"); b.setAttribute("aria-checked", "false"); b.tabIndex = -1; });
+    container.addEventListener("keydown", (e) => {
+      const i = buttons.indexOf(document.activeElement);
+      if (i < 0) return;
+      let j;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") j = (i + 1) % buttons.length;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") j = (i - 1 + buttons.length) % buttons.length;
+      else if (e.key === "Home") j = 0;
+      else if (e.key === "End") j = buttons.length - 1;
+      else return;   // Space (pan), digits (chord/tool) and letters (group switch) bubble to the editor handler
+      e.preventDefault(); e.stopPropagation();
+      buttons[j].click(); buttons[j].focus();   // selection follows focus; click() applies → syncRadios updates checked
+    });
+  }
+  function syncRadios() {   // mirror each group's .active value onto aria-checked + roving tabindex (the focusable one)
+    const m = editorHost; if (!m) return;
+    [m.swatchEls, m.textBgChips, m.stampChips, m.lineStyleChips, m.lineWidthChips].forEach((grp) => {
+      let sel = grp.findIndex((b) => b.classList.contains("active"));
+      if (sel < 0) sel = 0;
+      grp.forEach((b, k) => { b.setAttribute("aria-checked", k === sel ? "true" : "false"); b.tabIndex = k === sel ? 0 : -1; });
+    });
+  }
+
+  // Keyboard accelerators layered on the radiogroups. Digits map to a property's values ONLY while
+  // its letter is held (a chord, e.g. c+3 = 3rd colour) — never via focus — so clicking or tabbing
+  // to a value never changes what a digit does (it still switches tools). Tapping a letter just
+  // moves focus into that group's selected value, where the standard radio arrows take over.
+  let heldProp = null;
+  function visibleGroup(k) {   // resolve a letter to its currently-visible [row, buttons]; s = style|stamp by context
+    const m = editorHost;
+    const cands = ({
+      c: [[m.globalRow, m.swatchEls]],
+      b: [[m.textBgRow, m.textBgChips]],
+      s: [[m.lineStyleRow, m.lineStyleChips], [m.stampRow, m.stampChips]],
+      w: [[m.lineWidthRow, m.lineWidthChips]],
+    })[k] || [];
+    for (const [row, grp] of cands) if (row.style.display !== "none" && grp.length) return [row, grp];
+    return null;
+  }
+  function updateChordUI() {   // reveal the 1…N value badges on the row whose letter is currently held
+    const m = editorHost; if (!m || !m.textPop) return;
+    const heldRow = heldProp && visibleGroup(heldProp) && visibleGroup(heldProp)[0];
+    [m.globalRow, m.textBgRow, m.stampRow, m.lineStyleRow, m.lineWidthRow].forEach((r) => r.classList.toggle("chordable", r === heldRow));
+  }
+  // Called on editor open and window blur so a held letter whose keyup is lost (alt-tab, macOS accent
+  // overlay) can't leave digits stuck routing to values instead of switching tools.
+  function disarmProps() { if (heldProp) { heldProp = null; updateChordUI(); } }
+  function focusGroup(grp) { (grp.find((b) => b.getAttribute("aria-checked") === "true") || grp[0]).focus(); }   // enter at the selected value
   document.addEventListener("keydown", (e) => {
     if (!editorHost || annoTextEdit) return;
+    if (/^(input|textarea|select)$/i.test(e.target.tagName)) return;   // never hijack typing in a field
+    const popOpen = editorHost.textPop && editorHost.textPop.style.display !== "none";
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
     if (e.key === "Escape") { editorHost.mode === "modal" ? closeAnnotator(false) : (setSel([]), redraw()); }
     else if (e.key === "Enter") { if (editorHost.mode === "modal") closeAnnotator(true); }
     else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSel(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.metaKey || e.ctrlKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); }
-    else if (e.key >= "1" && e.key <= "5" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setTool(TOOL_KEYS[+e.key - 1]); }
+    else if (heldProp && plain && e.key >= "1" && e.key <= "9") {   // chord: hold a letter, press a digit → Nth value
+      const g = visibleGroup(heldProp); e.preventDefault();
+      const n = +e.key - 1;
+      if (g && n < g[1].length) { g[1][n].click(); g[1][n].focus(); }
+    }
+    else if (plain && e.key >= "1" && e.key <= "5") { e.preventDefault(); setTool(TOOL_KEYS[+e.key - 1]); }   // digit, no letter held → tool
+    else if (plain && /^[cbsw]$/.test(e.key) && popOpen) {   // tap/hold a property letter → focus its group (and arm the chord)
+      const g = visibleGroup(e.key);
+      if (g) { e.preventDefault(); if (!e.repeat) { heldProp = e.key; focusGroup(g[1]); updateChordUI(); } }
+    }
     else if (e.key === " ") { e.preventDefault(); annoSpace = true; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); editorHost.canvas.style.cursor = "grab"; }
   });
   document.addEventListener("keyup", (e) => {
     if (e.key === " " && annoSpace) { annoSpace = false; if (editorHost && (!annoAction || annoAction.kind !== "pan")) editorHost.canvas.style.cursor = ""; }
+    else if (heldProp && e.key === heldProp) { heldProp = null; updateChordUI(); }   // letter released → digits go back to tools
   });
+  window.addEventListener("blur", disarmProps);   // a lost keyup must never leave a letter stuck "held"
 
   // ---------- Annotator tab ----------
   function setAnnoImage(dataUrl) {
