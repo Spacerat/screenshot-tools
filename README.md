@@ -8,12 +8,11 @@ Fully vibecoded! Only this README section was written by hand.
 
 # Vibecoded README
 
-A dependency-free static app with two tools, switchable via tabs. Everything runs in your browser — no build step, no uploads.
+A single, dependency-free HTML file (`index.html`) with three tools, switchable via tabs. Everything runs in your browser — no server, no build step, no uploads.
 
-Each tool has its own clean URL, so you can deep-link or share a link straight to a tool: `/before-after/`, `/annotator/`, and `/tutorial/`.
-Those route pages are tiny static shells for GitHub Pages; the shared UI and behavior live in `src/`.
+Each tool has its own URL via hash routing, so you can deep-link or share a link straight to a tool: `#/before-after`, `#/annotator`, and `#/tutorial`. (No server config needed — it stays a single static file.)
 
-**Live:** https://veryjoe.com/screenshot-tools/ ([Annotator](https://veryjoe.com/screenshot-tools/annotator/))
+**Live:** https://veryjoe.com/screenshot-tools/ ([Annotator](https://veryjoe.com/screenshot-tools/#/annotator))
 
 ## Before / After
 
@@ -32,17 +31,19 @@ Those route pages are tiny static shells for GitHub Pages; the shared UI and beh
 - Marquee multi-select, move/resize, undo/redo, and keyboard shortcuts (1–5 for tools, ⌘Z to undo, …). Annotate outside the image and the export grows to fit.
 - Export the annotated image as PNG/JPEG/WebP/SVG, or copy it.
 
-The annotation editor is shared between both tools — the Before/After **Annotate** button opens the same editor in a modal.
+The annotation editor is shared across all three tools — the **Annotate** buttons in Before/After and Tutorial open the same editor in a modal.
+
+## Tutorial
+
+- Upload or drop several screenshots at once to build a **numbered, step-by-step tutorial**.
+- A title and an optional intro paragraph (centered or left-aligned); each step gets optional text after its number and a caption.
+- Reorder steps (↑ / ↓) or reverse them all, annotate any step, choose **vertical or horizontal** layout and **number or letter** labels.
+- Export the whole tutorial or **each step** separately as PNG/JPEG/WebP/SVG, or copy it to the clipboard.
+- **Save / Open** editable project files (`.json`, images included).
 
 ## Usage
 
-Serve the folder locally, then open the printed URL:
-
-```sh
-python3 -m http.server
-```
-
-You can also use the hosted version linked above.
+Open `index.html` in any modern browser, or use the hosted version linked above.
 
 ## License
 
