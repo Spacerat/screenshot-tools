@@ -1,2 +1,3 @@
 .claude/
 .DS_Store
+tests/golden/**/*.actual

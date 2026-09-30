@@ -1,0 +1,109 @@
+{
+ "anno.export.names": [
+  "annotated.png",
+  "annotated.svg"
+ ],
+ "anno.export/annotated.png": "894e054bd4c17c7048a41ed78d30e8f53f5f08fd882ece5e0508be417be8547c",
+ "ba-horizontal.preview": "880a18b628f31fdd829f3aa46f64d00bde985c97c0778a6c11759d799a1c2921",
+ "ba.dims": "1252 × 2165 px",
+ "ba.export.names": [
+  "1-navigation-bar.svg",
+  "2-change.svg",
+  "checkout-redesign.jpg",
+  "checkout-redesign.png",
+  "checkout-redesign.svg",
+  "navigation-bar.svg"
+ ],
+ "ba.export/checkout-redesign.jpg": "95046de54aef5494c6006888f31a4177eda27bcb9aa1fa7a69e6d74090df5155",
+ "ba.export/checkout-redesign.png": "a77e9cb3dde4508a7b5a076b3513feb3e2688fb602008a48bec8d5636bda782a",
+ "ba.preview": "4d4675ceca67009b8aaf2c6f857aae185dd5e3c0dff57e7b860123e7510b8fef",
+ "editor.all": [
+  {
+   "color": "#22c55e",
+   "h": 0.4,
+   "lineStyle": "dashed",
+   "lineWidth": "medium",
+   "type": "box",
+   "w": 0.3,
+   "x": 0.1,
+   "y": 0.1
+  },
+  {
+   "color": "#22c55e",
+   "n": 1,
+   "size": 20,
+   "style": "letters",
+   "type": "number",
+   "x": 0.8,
+   "y": 0.2
+  },
+  {
+   "color": "#22c55e",
+   "fromRef": 0,
+   "lineStyle": "dashed",
+   "lineWidth": "medium",
+   "toRef": 1,
+   "type": "arrow",
+   "x1": 0.25,
+   "x2": 0.8,
+   "y1": 0.3,
+   "y2": 0.2
+  },
+  {
+   "bgOn": false,
+   "color": "#22c55e",
+   "size": 22,
+   "text": "Hi",
+   "type": "text",
+   "x": 0.5,
+   "y": 0.8
+  }
+ ],
+ "editor.box": [
+  {
+   "color": "#22c55e",
+   "h": 0.4,
+   "lineStyle": "dashed",
+   "lineWidth": "medium",
+   "type": "box",
+   "w": 0.3,
+   "x": 0.1,
+   "y": 0.1
+  }
+ ],
+ "editor.rows.box": [
+  "Color",
+  "Style",
+  "Width"
+ ],
+ "editor.rows.number": [
+  "Color",
+  "Stamp"
+ ],
+ "editor.rows.selection": [
+  "Color",
+  "Background",
+  "Stamp",
+  "Style",
+  "Width"
+ ],
+ "tut-horizontal.preview": "45c5cfa00e7a565b0cc5083e4039f5e8ab446fa7a10d39a59f6d3804b1be40e6",
+ "tut-multi-horizontal.preview": "07eda7e9a30caff97bb72f1912301700d5f92d7602821d3e8464a6aa360599e1",
+ "tut-multi.export.names": [
+  "1-before-and-after-clicking.svg",
+  "2-single-shot.svg",
+  "3-three-shots.svg",
+  "multi-shot-tutorial.svg"
+ ],
+ "tut-multi.preview": "d6343e26b813c04cffc68176e0d46219f7f114e6f7cde8bdf2b51768df64de22",
+ "tut.dims": "856 × 2224 px",
+ "tut.export.names": [
+  "1-open-the-menu.svg",
+  "2-step.svg",
+  "3-a-long-step-title-that-should-wrap-across-more-than-one-line-in-the-tutorial-layout.svg",
+  "how-to-create-a-report.png",
+  "how-to-create-a-report.svg"
+ ],
+ "tut.export/how-to-create-a-report.png": "6a1a77a633366a0060c674e7f1b904fcbf47027472c6a9e596e8335dcf28676c",
+ "tut.preview": "0e4ae60e9bdad8845b15244b8832c7c0bb854c6d8896c12ba2dfb8172afcedbe"
+}
