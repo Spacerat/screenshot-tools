@@ -164,7 +164,7 @@
   .tp-row.chordable .swatch .vidx{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)}
   .modal-canvas-wrap{position:relative;padding:16px;overflow:auto;background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:0}
   .anno-canvas{display:block;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.15);touch-action:none}
-  .anno-canvas.draw{cursor:crosshair}
+  .drawing .anno-canvas{cursor:crosshair}
 
   .tabs{max-width:1400px;margin:0 auto 10px;display:flex;gap:4px;border-bottom:1px solid var(--line)}
   .tab{border:none;background:transparent;padding:10px 16px;font-weight:700;color:var(--muted);border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -174,8 +174,14 @@
   .anno-drop{border:2px dashed var(--line);border-radius:14px;background:#fff;padding:64px 20px;text-align:center;color:var(--muted)}
   .anno-drop-title{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:6px}
   .linkish{border:none;background:transparent;color:var(--accent);font-weight:700;padding:0;text-decoration:underline}
-  .anno-editor{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-  .anno-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+  .anno-card{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+  .anno-card+.anno-card{margin-top:16px}
+  .anno-card.active:not(:only-child){border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+  .anno-card:not(.active) .modal-bar{opacity:.5;transition:opacity .1s}
+  .anno-card:not(.active) .modal-bar:hover{opacity:1}
+  .anno-more{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .anno-more .drop-tip{margin:0}
+  .anno-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
   .anno-input{position:absolute;z-index:5;box-sizing:border-box;border:none;border-radius:14px;font-weight:700;font-family:inherit;line-height:1.2;color:#fff;outline:2px solid #fff;box-shadow:0 0 0 4px rgba(79,70,229,.5);width:auto;min-width:50px;resize:none;overflow:auto;white-space:pre}
   .modal-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
   .modal-hint{color:var(--muted);font-size:12px}
@@ -385,15 +391,17 @@
 <div id="tab-anno" hidden>
   <div class="anno-page">
     <div id="annoDrop" class="anno-drop">
-      <div class="anno-drop-title">Annotate an image</div>
-      <p>Drop an image anywhere on the page, paste from your clipboard, or
+      <div class="anno-drop-title">Annotate images</div>
+      <p>Drop images anywhere on the page, paste from your clipboard, or
         <button id="annoBrowse" class="linkish">browse</button>.</p>
-      <input type="file" id="annoFile" accept="image/*" hidden>
+      <input type="file" id="annoFile" accept="image/*" multiple hidden>
     </div>
-    <div id="annoEditor" class="anno-editor" hidden></div>
-    <div id="annoFoot" class="anno-foot" hidden>
-      <button id="annoReplace">↻ Replace image</button>
-      <div class="bar-actions" id="annoActions"></div>
+    <div id="annoEditor" hidden>
+      <div id="annoCards"></div>
+      <div class="anno-more">
+        <button id="annoAdd">+ Add images</button>
+        <p class="drop-tip">Or drop or paste them anywhere on the page.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -603,7 +611,7 @@
   // ---------- session persistence ----------
   const STORE_KEY = "beforeafter:v1";
   let saveTimer = null;
-  const snapshot = () => ({ v: 2, tab: currentTab, ba: ba.snapshot(), tutorial: tut.snapshot(), anno: slotData(annoDoc) });
+  const snapshot = () => ({ v: 3, tab: currentTab, ba: ba.snapshot(), tutorial: tut.snapshot(), anno: annoDocs.map(slotData) });
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -614,10 +622,10 @@
   function loadSaved() {
     let d;
     try { d = JSON.parse(sessionStorage.getItem(STORE_KEY)); } catch (e) { return; }
-    if (!d || d.v !== 2) return;
+    if (!d || d.v !== 3) return;
     ba.restore(d.ba);
     tut.restore(d.tutorial);
-    Object.assign(annoDoc, restoreSlot(d.anno));
+    annoDocs = (d.anno || []).map(restoreSlot).filter((s) => s.dataUrl);
     currentTab = TABS[d.tab] ? d.tab : "ba";
   }
 
@@ -641,7 +649,7 @@
     const item = items.find((it) => it.kind === "file" && it.type.startsWith("image/"));
     const file = item && item.getAsFile();
     if (!file || modalOpen()) return;   // nothing pastes behind the annotate dialog
-    if (currentTab === "anno") { if (annoTextEdit) return; loadAnnoFile(file); }
+    if (currentTab === "anno") { if (annoTextEdit) return; addAnnoImages([file]); }
     else if (activePaste) activePaste.fill(file);
     else return;
     e.preventDefault();
@@ -1257,7 +1265,7 @@
   // Annotations live in image-normalized coordinates (x by width, y by height). Sizes (stroke widths,
   // label fonts, stamp radii) live in 560-WIDTH space, so a height expressed as (px/560) is a width
   // fraction; `aspect` (image width / height) converts it into the normalized height space.
-  const lineWidthValue = (w) => w === "small" ? 2 : w === "large" ? 7 : 4;
+  const lineWidthValue = (w) => w === "large" ? 7 : w === "medium" ? 4 : 2;
   const lineDash = (style, sw) => style === "dashed" ? [sw * 3, sw * 2] : style === "dotted" ? [sw * 0.1, sw * 2] : [];
 
   // A label's display style. No background gets a halo; a background uses the color as its fill, with
@@ -1426,11 +1434,12 @@
     { key: "lineStyle", label: "Style", aria: "Line style", letter: "s", types: ["box", "arrow"], fromSel: true, values: [["solid", "Line"], ["dashed", "Dash"], ["dotted", "Dot"]] },
     { key: "lineWidth", label: "Width", aria: "Line width", letter: "w", types: ["box", "arrow"], fromSel: true, values: [["small", "S"], ["medium", "M"], ["large", "L"]] },
   ];
-  const brushDefault = (p) => p.values[p.key === "lineWidth" ? 1 : 0][0];
+  const brushDefault = (p) => p.values[0][0];
 
   let modalEls = null, inlineEls = null, editorHost = null;   // active editor host (modal or inline)
   let currentTab = "ba";
-  const annoDoc = newSlot();                                  // the Annotator tab's single image
+  let annoDocs = [];                // the Annotator tab's images
+  let annoLast = null;              // the one most recently active there
   let annoSlot = null, annoOnCommit = null;
   let annoWork = [], annoTool = "select";
   let brush = {};                   // current value of each PROPS key, applied to new annotations
@@ -1515,8 +1524,10 @@
   // ----- toolbar + brush palette -----
   function updateToolbar() {
     const m = editorHost; if (!m) return;
-    Object.entries(m.toolBtns).forEach(([id, b]) => b.classList.toggle("active", id === annoTool));
-    m.canvas.classList.toggle("draw", annoTool !== "select");
+    // the tool carries between images, so every image's toolbar shows it
+    (m.live ? annoDocs.filter((s) => s._ui).map((s) => s._ui) : [m]).forEach((ui) =>
+      Object.entries(ui.toolBtns).forEach(([id, b]) => b.classList.toggle("active", id === annoTool)));
+    m.root.classList.toggle("drawing", annoTool !== "select");
   }
   const selectedOf = (types) => selArr().map((i) => annoWork[i]).filter((a) => a && (!types || types.includes(a.type)));
   const propVisible = (p) => !p.types || p.types.includes(annoTool) || selectedOf(p.types).length > 0;
@@ -1571,15 +1582,19 @@
     return hs;
   }
 
+  // The image and its annotations on the plane; redraw adds the selection and gesture marks on top.
+  function paintPlane(ctx, img, rect, dispW, dispH, anns, skip = -1) {
+    ctx.setTransform(annoDPR, 0, 0, annoDPR, 0, 0);
+    ctx.fillStyle = "#e9eef4"; ctx.fillRect(0, 0, dispW, dispH);
+    ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+    ctx.strokeStyle = "rgba(15,23,42,.25)"; ctx.lineWidth = 1;
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+    annoPrims(rect, anns, skip).forEach((p) => drawPrim(ctx, p));
+  }
   function redraw() {
     const m = editorHost; if (!m || !annoSlot) return;
     const ctx = m.ctx;
-    ctx.setTransform(annoDPR, 0, 0, annoDPR, 0, 0);
-    ctx.fillStyle = "#e9eef4"; ctx.fillRect(0, 0, annoDispW, annoDispH);
-    ctx.drawImage(annoSlot.img, annoImgRect.x, annoImgRect.y, annoImgRect.w, annoImgRect.h);
-    ctx.strokeStyle = "rgba(15,23,42,.25)"; ctx.lineWidth = 1;
-    ctx.strokeRect(annoImgRect.x + 0.5, annoImgRect.y + 0.5, annoImgRect.w - 1, annoImgRect.h - 1);
-    annoPrims(annoImgRect, annoWork, annoTextEdit ? annoTextEdit.i : -1).forEach((p) => drawPrim(ctx, p));
+    paintPlane(ctx, annoSlot.img, annoImgRect, annoDispW, annoDispH, annoWork, annoTextEdit ? annoTextEdit.i : -1);
     if (annoDraft) annoPrimitives(annoImgRect, annoDraft).forEach((p) => drawPrim(ctx, p));
     const byId = buildById(annoWork), aspect = edAspect();
     annoSel.forEach((i) => {
@@ -1705,12 +1720,16 @@
   }
 
   function onAnnoDown(e) {
-    e.preventDefault(); try { editorHost.canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+    const slot = e.currentTarget._slot, switching = !!slot && slot !== annoSlot;
+    if (slot) activateCard(slot);
+    try { editorHost.canvas.setPointerCapture(e.pointerId); } catch (_) {}
     if (annoTextEdit) commitTextEdit();
     if (annoSpace || e.button === 1) {   // pan the plane
       annoAction = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: annoImgRect.x, oy: annoImgRect.y };
       editorHost.canvas.style.cursor = "grabbing"; return;
     }
+    if (switching && (annoTool === "number" || annoTool === "text")) return;   // a click on another image only switches to it
     const { dx, dy } = evtPos(e), nx = D2NX(dx), ny = D2NY(dy);
     const handleAt = (kinds) => selHandles().find((hd) => (!kinds || kinds.includes(hd.kind)) && Math.hypot(dx - hd.x, dy - hd.y) <= 12);
     if (annoTool === "number") {
@@ -1739,7 +1758,7 @@
       annoWork.push(newText(nx, ny));
       setSel([annoWork.length - 1]); startTextEdit(annoWork.length - 1, true); return;
     }
-    annoAction = { kind: "draw", startNX: nx, startNY: ny };
+    annoAction = { kind: "draw", startNX: nx, startNY: ny, switching };
     annoDraft = newLine(annoTool, nx, ny);
   }
   function onAnnoMove(e) {
@@ -1788,9 +1807,10 @@
     if (A.kind === "pan") { editorHost.canvas.style.cursor = annoSpace ? "grab" : ""; return; }
     if (A.kind === "draw") {
       const d = annoDraft; annoDraft = null;
-      const ok = d.type === "box" ? true : (Math.hypot(d.x2 - d.x1, d.y2 - d.y1) > 0.015);
+      const ok = (d.type === "box" ? Math.hypot(d.w, d.h) : Math.hypot(d.x2 - d.x1, d.y2 - d.y1)) > 0.015;
       if (ok) { annoWork.push(d); setSel([annoWork.length - 1]); if (d.type === "arrow") { pinEndpointIfOver(d, 1); pinEndpointIfOver(d, 2); } pushHistory(); }
-      resetToSelect(); redraw(); return;
+      if (ok || !A.switching) resetToSelect();
+      redraw(); return;
     }
     if (A.kind === "band") { updateToolbar(); redraw(); return; }
     if (A.kind === "endpoint" || A.kind === "arrowHandle") pinEndpointIfOver(annoWork[A.i], A.end);
@@ -1799,10 +1819,23 @@
     redraw();
   }
 
-  // Build the shared editor chrome (toolbar + canvas + inline text input + brush palette), wired to
-  // the shared handlers which read/write the active `editorHost`. Used by both the modal and the inline tab.
-  function makeEditorUI() {
+  function makeCanvas(slot) {
     const canvas = h("canvas", { class: "anno-canvas" });
+    canvas._slot = slot;
+    canvas.addEventListener("pointerdown", onAnnoDown);
+    canvas.addEventListener("pointermove", onAnnoMove);
+    canvas.addEventListener("pointerup", onAnnoUp);
+    canvas.addEventListener("wheel", onAnnoWheel, { passive: false });
+    canvas.addEventListener("dblclick", (e) => {
+      if (annoTool !== "select") return;
+      const { dx, dy } = evtPos(e);
+      for (let i = annoWork.length - 1; i >= 0; i--) { if (annoWork[i].type === "text" && annoHit(annoWork[i], dx, dy)) { setSel([i]); startTextEdit(i, false); redraw(); return; } }
+    });
+    return canvas;
+  }
+  // Build the shared editor chrome (toolbar + inline text input + brush palette), wired to the shared
+  // handlers which read/write the active `editorHost`. Used by both the modal and the inline tab.
+  function makeEditorUI() {
     const input = h("textarea", { class: "anno-input", rows: "1", wrap: "off", style: "display:none" });
     input.addEventListener("keydown", (e) => {
       e.stopPropagation();   // Enter commits; Shift+Enter adds a newline; Escape cancels
@@ -1840,26 +1873,17 @@
     const textPop = h("div", { class: "text-pop" }, props.map((x) => x.row));
     // Undo/redo/delete are keyboard-only (⌘Z / ⌘⇧Z / Del) — no toolbar buttons.
     toolbar.append(
-      h("button", { class: "tool", onclick: clearAnno }, "Clear all"),
+      h("button", { class: "tool", title: "Remove every annotation from this image", onclick: clearAnno }, "Clear all"),
       h("span", { class: "sep" }),
       h("button", { class: "tool", title: "Zoom out", onclick: () => zoomBy(1 / 1.25) }, "−"),
       h("button", { class: "tool", title: "Fit image to view", onclick: () => { fitView(); redraw(); } }, "⤢ Fit"),
       h("button", { class: "tool", title: "Zoom in", onclick: () => zoomBy(1.25) }, "+"),
     );
-    canvas.addEventListener("pointerdown", onAnnoDown);
-    canvas.addEventListener("pointermove", onAnnoMove);
-    canvas.addEventListener("pointerup", onAnnoUp);
-    canvas.addEventListener("wheel", onAnnoWheel, { passive: false });
-    canvas.addEventListener("dblclick", (e) => {
-      if (annoTool !== "select") return;
-      const { dx, dy } = evtPos(e);
-      for (let i = annoWork.length - 1; i >= 0; i--) { if (annoWork[i].type === "text" && annoHit(annoWork[i], dx, dy)) { setSel([i]); startTextEdit(i, false); redraw(); return; } }
-    });
-    return { canvas, input, toolbar, toolBtns, textPop, props, ctx: canvas.getContext("2d") };
+    return { input, toolbar, toolBtns, textPop, props };
   }
   function ensureModal() {
     if (modalEls) return modalEls;
-    const ui = makeEditorUI();
+    const ui = makeEditorUI(), canvas = makeCanvas();
     const foot = h("div", { class: "modal-foot" },
       h("span", { class: "modal-hint" }, "scroll to pan · ⌃scroll / pinch to zoom · space-drag to pan · drag to draw or box-select · double-click a label to edit"),
       h("div", { style: "display:flex;gap:8px" },
@@ -1867,17 +1891,15 @@
         h("button", { class: "primary", onclick: () => closeAnnotator(true) }, "Done"),
       ),
     );
-    const modal = h("div", { class: "modal" }, ui.toolbar, h("div", { class: "modal-canvas-wrap" }, ui.canvas, ui.input, ui.textPop), foot);
+    const modal = h("div", { class: "modal" }, ui.toolbar, h("div", { class: "modal-canvas-wrap" }, canvas, ui.input, ui.textPop), foot);
     const backdrop = h("div", { class: "modal-backdrop", onclick: (e) => { if (e.target === backdrop) closeAnnotator(false); } }, modal);
     document.body.append(backdrop);
-    modalEls = Object.assign({ mode: "modal", backdrop }, ui);
+    modalEls = Object.assign({ mode: "modal", backdrop, root: backdrop, canvas, ctx: canvas.getContext("2d") }, ui);
     return modalEls;
   }
   function ensureInline() {
     if (inlineEls) return inlineEls;
-    const ui = makeEditorUI();
-    $("annoEditor").append(ui.toolbar, h("div", { class: "modal-canvas-wrap", style: "border-radius:14px" }, ui.canvas, ui.input, ui.textPop));
-    inlineEls = Object.assign({ mode: "inline", live: true }, ui);
+    inlineEls = { mode: "inline", live: true, root: $("annoEditor") };   // takes each card's canvas and chrome as it becomes active
     return inlineEls;
   }
 
@@ -1888,6 +1910,10 @@
     const m = editorHost;
     annoDispW = Math.round(Math.min(window.innerWidth * 0.92, 1500));
     annoDispH = Math.round(window.innerHeight * 0.76);
+    if (m.live) {   // a card fits the page column and is only as tall as its image needs
+      annoDispW = Math.min(annoDispW, annoSlot._wrap.clientWidth - 32);
+      annoDispH = Math.min(annoDispH, Math.max(240, Math.round(annoDispW * annoSlot.h / annoSlot.w)));
+    }
     annoDPR = window.devicePixelRatio || 1;
     m.canvas.width = annoDispW * annoDPR; m.canvas.height = annoDispH * annoDPR;
     m.canvas.style.width = annoDispW + "px"; m.canvas.style.height = annoDispH + "px";
@@ -1896,39 +1922,49 @@
     const s = Math.min(annoDispW / annoSlot.w, annoDispH / annoSlot.h) * 0.7;   // 70% leaves room to draw outside
     const w = annoSlot.w * s, h = annoSlot.h * s;
     annoImgRect = { x: (annoDispW - w) / 2, y: (annoDispH - h) / 2, w, h };
+    if (annoSlot._ed) annoSlot._ed.zoomed = false;
   }
   function zoomAt(cx, cy, f) {
     const nw = Math.max(60, Math.min(40000, annoImgRect.w * f)), rf = nw / annoImgRect.w;
+    if (annoSlot._ed) annoSlot._ed.zoomed = true;
     const nx = (cx - annoImgRect.x) / annoImgRect.w, ny = (cy - annoImgRect.y) / annoImgRect.h;
     annoImgRect.w *= rf; annoImgRect.h *= rf;
     annoImgRect.x = cx - nx * annoImgRect.w; annoImgRect.y = cy - ny * annoImgRect.h;
   }
   function zoomBy(f) { zoomAt(annoDispW / 2, annoDispH / 2, f); redraw(); }
   function onAnnoWheel(e) {
+    // in a stack of images, scrolling moves down the page until an image has been zoomed
+    const slot = e.currentTarget._slot;
+    if (slot && annoDocs.length > 1 && !e.ctrlKey && !(slot._ed && slot._ed.zoomed)) return;
     e.preventDefault();
+    if (slot) activateCard(slot);
     const r = editorHost.canvas.getBoundingClientRect();
     if (e.ctrlKey) zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.01));  // pinch / ⌃scroll
     else { annoImgRect.x -= e.deltaX; annoImgRect.y -= e.deltaY; }                              // two-finger / wheel pan
     redraw();
   }
 
-  // shared setup for either host: the brush starts from the most recent annotation of each kind
-  function startEditing(slot) {
-    annoSlot = slot;
-    annoWork = cloneAnns(slot.annotations);
+  // Fresh tool state for a new editing session: the brush starts from the most recent annotation of each kind.
+  function startSession(anns) {
     brush = Object.fromEntries(PROPS.map((p) => [p.key, brushDefault(p)]));
     for (const p of PROPS) {
       if (!p.types) continue;
-      const last = annoWork.filter((a) => p.types.includes(a.type)).pop();
+      const last = anns.filter((a) => p.types.includes(a.type)).pop();
       if (last && last[p.key] !== undefined) brush[p.key] = last[p.key];
     }
-    const lastStamp = annoWork.filter((a) => a.type === "number").pop();
+    const lastStamp = anns.filter((a) => a.type === "number").pop();
     annoStampSize = (lastStamp && lastStamp.size) || 20;
     annoTool = "select";
-    setSel([]); annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false; disarmProps();
+    annoDraft = null; annoAction = null; annoTextEdit = null; annoSpace = false; disarmProps();
+  }
+  function startEditing(slot) {
+    annoSlot = slot;
+    annoWork = cloneAnns(slot.annotations);
+    startSession(annoWork);
+    editorHost.input.style.display = "none";
+    setSel([]);
     annoHist = []; annoHistIdx = -1; pushHistory();
     setViewport(); fitView();
-    editorHost.input.style.display = "none";
     updateToolbar(); redraw();
   }
   const modalOpen = () => !!modalEls && modalEls.backdrop.classList.contains("open");
@@ -1945,11 +1981,6 @@
     modalEls.backdrop.classList.remove("open");
     if (commit && annoSlot) { annoSlot.annotations = annoWork; annoOnCommit(); }
     annoSlot = null; annoOnCommit = null; editorHost = null;
-  }
-  function openInline() {               // Annotator tab (live editing)
-    if (!annoDoc.img) return;
-    editorHost = ensureInline(); annoOnCommit = null;
-    startEditing(annoDoc);
   }
   // in the inline tab, edits apply to the document immediately (no Done step)
   function commitLive() { if (editorHost && editorHost.live && annoSlot) { annoSlot.annotations = cloneAnns(annoWork); scheduleSave(); } }
@@ -2028,21 +2059,104 @@
   window.addEventListener("blur", disarmProps);   // a lost keyup must never leave a letter stuck "held"
 
   // ---------- Annotator tab ----------
-  function loadAnnoFile(file) {
-    readFile(file).then((u) => setSlotImage(annoDoc, u)).then(() => { if (currentTab === "anno") enterAnnotator(); scheduleSave(); });
+  // A stack of images, each with its own canvas and toolbar; the current tool and brush carry between them.
+  // The editor's globals hold the active image; the others keep their history and view in slot._ed and
+  // show slot.annotations, which live editing keeps current. Using an image or its toolbar makes it active.
+  function annoCard(slot) {
+    if (slot._card) return slot._card;
+    const source = { name: () => annoDocs.length > 1 ? `annotated-${annoDocs.indexOf(slot) + 1}` : "annotated", layout: (fmt) => annotatorLayout(slot, fmt) };
+    const picker = onPicked(h("input", { type: "file", accept: "image/*", hidden: "" }), (files) => replaceAnnoImage(slot, files[0]));
+    slot._canvas = makeCanvas(slot);
+    slot._ctx = slot._canvas.getContext("2d");
+    const ui = slot._ui = makeEditorUI();
+    ui.toolbar.addEventListener("click", () => activateCard(slot), true);   // before the button acts on the active image
+    slot._wrap = h("div", { class: "modal-canvas-wrap" }, slot._canvas, ui.input, ui.textPop);
+    ui.textPop.style.display = "none";
+    slot._card = h("div", { class: "anno-card" }, ui.toolbar, slot._wrap,
+      h("div", { class: "anno-foot" },
+        h("div", { class: "bar-actions" },
+          h("button", { onclick: () => picker.click() }, "↻ Replace"),
+          h("button", { onclick: () => removeAnnoImage(slot) }, "✕ Remove"),
+          picker,
+        ),
+        h("div", { class: "bar-actions" }, exportMenus(source)),
+      ),
+    );
+    return slot._card;
   }
+  function stashCard() {
+    if (annoTextEdit) commitTextEdit();
+    const slot = annoSlot;
+    if (!slot) return;
+    Object.assign(slot._ed, { hist: annoHist, histIdx: annoHistIdx, rect: annoImgRect, dispW: annoDispW, dispH: annoDispH });
+    slot._card.classList.remove("active");
+    slot._ui.textPop.style.display = "none";
+    disarmProps();
+    paintPlane(slot._ctx, slot.img, annoImgRect, annoDispW, annoDispH, slot.annotations);
+    annoSlot = null;
+  }
+  function activateCard(slot) {
+    if (annoSlot === slot) return;
+    stashCard();
+    const m = editorHost;
+    annoSlot = annoLast = slot;
+    Object.assign(m, slot._ui, { canvas: slot._canvas, ctx: slot._ctx });
+    slot._card.classList.add("active");
+    annoWork = cloneAnns(slot.annotations);
+    setSel([]);
+    if (slot._ed) {
+      ({ hist: annoHist, histIdx: annoHistIdx, rect: annoImgRect, dispW: annoDispW, dispH: annoDispH } = slot._ed);
+    } else {
+      slot._ed = { zoomed: false };
+      annoHist = []; annoHistIdx = -1; pushHistory();
+      setViewport(); fitView();
+    }
+    redraw();
+  }
+  // Show the images, or the drop page if there are none yet.
   function enterAnnotator() {
-    const hasImg = !!annoDoc.img;
-    $("annoDrop").hidden = hasImg;
-    $("annoEditor").hidden = !hasImg;
-    $("annoFoot").hidden = !hasImg;
-    if (hasImg) openInline(); else editorHost = null;
+    const ready = annoDocs.filter((s) => s.img);
+    $("annoDrop").hidden = ready.length > 0;
+    $("annoEditor").hidden = !ready.length;
+    if (!ready.length) { editorHost = annoSlot = null; return; }
+    const entering = !editorHost;
+    editorHost = ensureInline(); annoOnCommit = null;
+    if (entering) startSession((annoLast || ready[0]).annotations);
+    $("annoCards").replaceChildren(...ready.map(annoCard));
+    ready.filter((s) => !s._ed).forEach(activateCard);   // each new canvas is sized while its card is on the page
+    activateCard(ready.includes(annoLast) ? annoLast : ready[0]);
+    updateToolbar();
   }
-  function leaveAnnotator() { if (annoTextEdit) commitTextEdit(); if (editorHost && editorHost.mode === "inline") editorHost = null; }
+  function leaveAnnotator() { if (editorHost && editorHost.mode === "inline") { stashCard(); editorHost = null; } }
+  async function addAnnoImages(files) {
+    const created = files.map(() => newSlot()), hadImages = annoDocs.length > 0;
+    annoDocs.push(...created);   // in place now, so images added together keep their order
+    await Promise.all(created.map((s, i) => readFile(files[i]).then((u) => setSlotImage(s, u)).catch(() => annoDocs.splice(annoDocs.indexOf(s), 1))));
+    const first = created.find((s) => s.img);
+    if (!first) return;
+    scheduleSave();
+    if (currentTab !== "anno") return;
+    enterAnnotator();
+    activateCard(first);
+    if (hadImages) first._card.scrollIntoView({ block: "center" });
+  }
+  async function replaceAnnoImage(slot, file) {
+    await setSlotImage(slot, await readFile(file));
+    scheduleSave();
+    if (currentTab !== "anno") return;
+    activateCard(slot);
+    setViewport(); fitView(); redraw();
+  }
+  function removeAnnoImage(slot) {
+    if (annoSlot === slot) stashCard();
+    const i = annoDocs.indexOf(slot);
+    annoDocs.splice(i, 1);
+    if (annoLast === slot) annoLast = annoDocs[Math.min(i, annoDocs.length - 1)] || null;
+    enterAnnotator();
+    scheduleSave();
+  }
   // The Annotator exports the bare image with annotations baked in, grown to fit any outside it.
-  function annotatorLayout(fmt) {
-    const slot = annoDoc;
-    if (!slot.img) return null;
+  function annotatorLayout(slot, fmt) {
     const ext = annsExtent(slot.annotations, slot.h ? slot.w / slot.h : 1);
     const W = (ext.x1 - ext.x0) * slot.w, H = (ext.y1 - ext.y0) * slot.h;
     const image = { kind: "image", plain: true, img: slot.img, x: (0 - ext.x0) * slot.w, y: (0 - ext.y0) * slot.h, w: slot.w, h: slot.h, annotations: slot.annotations };
@@ -2052,7 +2166,7 @@
   // ---------- tabs + hash routing: each tool gets its own URL (#/before-after, #/annotator, #/tutorial) ----------
   const TABS = {
     ba: { slug: "before-after", title: "Before / After Builder", sub: "Compose before/after screenshots into a single shareable PNG — entirely in your browser, nothing uploaded." },
-    anno: { slug: "annotator", title: "Annotator", sub: "Annotate a screenshot with boxes, arrows, numbers and labels, then export it — entirely in your browser, nothing uploaded." },
+    anno: { slug: "annotator", title: "Annotator", sub: "Annotate screenshots with boxes, arrows, numbers and labels, then export each one — entirely in your browser, nothing uploaded." },
     tut: { slug: "tutorial", title: "Tutorial Builder", sub: "Upload, annotate and reorder screenshots into a numbered tutorial — entirely in your browser, nothing uploaded." },
   };
   const tabFromHash = () => Object.keys(TABS).find((k) => TABS[k].slug === location.hash.replace(/^#\/?/, "")) || null;
@@ -2070,6 +2184,7 @@
     $("modeTitle").textContent = TABS[currentTab].title;
     $("modeSub").textContent = TABS[currentTab].sub;
     clearPasteTarget();
+    if (modalOpen()) closeAnnotator(false);
     currentTab === "anno" ? enterAnnotator() : leaveAnnotator();
     if (currentTab === "tut") tut.redraw();
     scheduleSave();
@@ -2129,14 +2244,13 @@
   $("tutActions").append(...exportMenus(tut.source(() => slug(tut.doc.title || "tutorial")), {
     each: { label: "⬇ Each step", sources: () => tut.doc.steps.map((s, i) => tut.source(() => `${i + 1}-${slug(s.title || "step")}`, { steps: [s], startIndex: i, omitHeading: true })) },
   }));
-  $("annoActions").append(...exportMenus({ name: () => "annotated", layout: annotatorLayout }));
 
-  const annoFile = onPicked($("annoFile"), (files) => loadAnnoFile(files[0]));
+  const annoFile = onPicked($("annoFile"), addAnnoImages);
   $("annoBrowse").addEventListener("click", () => annoFile.click());
-  $("annoReplace").addEventListener("click", () => annoFile.click());
+  $("annoAdd").addEventListener("click", () => annoFile.click());
 
   // ---------- drag and drop ----------
-  // Page-wide targets: files add new changes / steps (or the Annotator's image); a dragged pair or screenshot
+  // Page-wide targets: files add new changes / steps / images to annotate; a dragged pair or screenshot
   // becomes a new change / step, placed by the pointer's height among the cards.
   const PAGE_DROP = {
     ba: {
@@ -2149,7 +2263,7 @@
       moveLabel: "Drop to make it a new step", root: () => tut.root,
       accepts: (it) => it.kind === "shot", move: (it, e) => moveShot(it, { at: cardIndexAt(tut.root, e) }),
     },
-    anno: { label: "Drop an image to annotate it", files: (files) => loadAnnoFile(files[0]) },
+    anno: { label: "Drop images to annotate them", files: addAnnoImages },
   };
   function dropTargetAt(e) {
     if (modalOpen()) return null;   // nothing drops behind the annotate dialog
@@ -2211,7 +2325,7 @@
   loadSaved();
   ba.refresh();
   tut.refresh();
-  if (annoDoc.dataUrl) setSlotImage(annoDoc, annoDoc.dataUrl).then(() => { if (currentTab === "anno") enterAnnotator(); });
+  Promise.all(annoDocs.map((s) => setSlotImage(s, s.dataUrl))).then(() => { if (currentTab === "anno") enterAnnotator(); });
   // The URL hash (if any) wins over the saved tab — so a shared #/annotator link opens the right tool.
   const initialTab = tabFromHash() || currentTab;
   const wantHash = "#/" + TABS[initialTab].slug;

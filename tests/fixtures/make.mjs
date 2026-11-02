@@ -40,7 +40,7 @@ const richAnns = () => [
   { id: "t1", type: "text", x: 0.55, y: 0.6, text: "Two-line\nlabel", size: 22, color: "#3b82f6", bgOn: true },
   { id: "a1", type: "arrow", x1: 0.8, y1: 0.9, x2: 0.3, y2: 0.3, fromRef: "t1", toRef: "b1", color: "#f59e0b", lineStyle: "dotted", lineWidth: "small" },
   { id: "n1", type: "number", x: 0.9, y: 0.15, n: 1, size: 24, style: "letters", color: "#a855f7" },
-  { id: "a2", type: "arrow", x1: 0.6, y1: 0.1, x2: 0.9, y2: 0.4, toRef: "n1", color: "#22c55e" },
+  { id: "a2", type: "arrow", x1: 0.6, y1: 0.1, x2: 0.9, y2: 0.4, toRef: "n1", color: "#22c55e", lineWidth: "medium" },
   { id: "t2", type: "text", x: 1.05, y: 0.2, text: "Halo", size: 18, color: "#22c55e", bgOn: false },
   { id: "t3", type: "text", x: -0.3, y: 0.8, text: "White pill", size: 20, bgOn: true, color: "#ffffff" },
 ];
@@ -58,7 +58,7 @@ write("before-after.json", {
       { before: shot(url.a, "Old nav", richAnns()), after: shot(url.b, "", [{ id: "n2", type: "number", x: 0.5, y: 0.5, n: 2, size: 20, color: "#3b82f6" }]) },
       { before: shot(url.c, "Only a before image here"), after: shot(null) },
     ] },
-    { title: "", pairs: [{ before: shot(url.d, "", [{ id: "b9", type: "box", x: -0.2, y: 0.4, w: 0.5, h: 0.3, color: "#111827" }]), after: shot(url.a, "Checker") }] },
+    { title: "", pairs: [{ before: shot(url.d, "", [{ id: "b9", type: "box", x: -0.2, y: 0.4, w: 0.5, h: 0.3, color: "#111827", lineWidth: "medium" }]), after: shot(url.a, "Checker") }] },
   ],
 });
 
@@ -74,14 +74,14 @@ write("tutorial.json", {
 });
 
 // A saved session with only the Annotator in use.
-write("session-annotator.json", { v: 2, tab: "anno", anno: shot(url.d, "", richAnns()) });
+write("session-annotator.json", { v: 3, tab: "anno", anno: [shot(url.d, "", richAnns())] });
 
 // Tutorial steps with several screenshots each.
 write("tutorial-multi.json", {
   v: 2, kind: "tutorial",
   title: "Multi-shot tutorial", description: "", descriptionAlign: "center", bg: "#ffffff", scale: 1, layout: "vertical", numbering: "numbers",
   steps: [
-    { title: "Before and after clicking", slots: [shot(url.a, "First", [{ id: "b5", type: "box", x: 0.2, y: 0.2, w: 0.3, h: 0.3, color: "#ef4444" }]), shot(url.b, "Then this")] },
+    { title: "Before and after clicking", slots: [shot(url.a, "First", [{ id: "b5", type: "box", x: 0.2, y: 0.2, w: 0.3, h: 0.3, color: "#ef4444", lineWidth: "medium" }]), shot(url.b, "Then this")] },
     { title: "Single shot", slots: [shot(url.c)] },
     { title: "Three shots", slots: [shot(url.d), shot(url.a, "Middle"), shot(null)] },
   ],

@@ -377,8 +377,8 @@ test("annotator: restore from session and export", async (t) => {
   await p.eval((d) => sessionStorage.setItem("beforeafter:v1", d), readFileSync(FIX("session-annotator.json"), "utf8"));
   await p.reload();
   await p.waitFor(() => __t.visible("#annoEditor"));
-  await p.menu("#annoFoot", "⬇ Download", "SVG");
-  await p.menu("#annoFoot", "⬇ Download", "PNG");
+  await p.menu(".anno-card", "⬇ Download", "SVG");
+  await p.menu(".anno-card", "⬇ Download", "PNG");
   t.goldenDownloads("anno.export", await p.downloads(2));
 });
 
@@ -543,13 +543,14 @@ test("drag and drop: page, card and image targets", async (t) => {
   await q.waitFor(() => __t.count("#changes .slot.filled") === 6);
   t.check(JSON.stringify(await counts(q, ".change")) === "[4,4]", "image drop fills just that slot");
 
-  // Annotator: anywhere on the page loads (or replaces) the image.
+  // Annotator: anywhere on the page adds images, even on top of one already there.
   const r = await t.page("#/annotator");
   await r.dropAt([FIX("c.png")], await r.center(".tabs"));
   await r.waitFor(() => __t.visible("#annoEditor canvas"));
   const first = await r.settle("#annoEditor canvas");
-  await r.dropAt([FIX("a.png")], await r.center("#annoFoot"));
-  t.check((await r.settle("#annoEditor canvas")) !== first, "dropping again replaces the image");
+  await r.dropAt([FIX("a.png"), FIX("b.png")], await r.center("#annoEditor canvas"));
+  await r.waitFor(() => __t.count(".anno-card") === 3);
+  t.check((await r.settle("#annoEditor canvas")) === first, "dropping on an image leaves it alone");
 });
 
 test("drag to rearrange: screenshots between steps, pairs between changes", async (t) => {
@@ -606,7 +607,7 @@ test("drag to rearrange: screenshots between steps, pairs between changes", asyn
 // The Annotator's annotations as saved to the session (ids replaced by indices, numbers rounded).
 async function savedAnnotations(p) {
   await sleep(450);   // session save is debounced
-  const anns = await p.eval(() => JSON.parse(sessionStorage.getItem("beforeafter:v1")).anno.annotations);
+  const anns = await p.eval(() => JSON.parse(sessionStorage.getItem("beforeafter:v1")).anno[0].annotations);
   const index = Object.fromEntries(anns.map((a, i) => [a.id, i]));
   return anns.map(({ id, ...a }) => Object.fromEntries(Object.entries(a).sort().map(([k, v]) =>
     [k, typeof v === "number" ? Math.round(v * 1e4) / 1e4 : (k === "fromRef" || k === "toRef") && v ? index[v] : v])));
@@ -650,8 +651,150 @@ test("annotator: drawing and styling with mouse and keyboard", async (t) => {
   t.check((await savedAnnotations(p)).length === 0, "Delete removes the selection");
   await p.key("z", 4);   // ⌘Z
   t.golden("editor.all", await savedAnnotations(p));
-  await p.menu("#annoFoot", "⬇ Download", "SVG");
+  await p.menu(".anno-card", "⬇ Download", "SVG");
   t.golden("editor.export/annotated.svg", (await p.downloads(1))[0].text);
+});
+
+test("annotator: several images at once", async (t) => {
+  const CARD = (n) => `.anno-card:nth-child(${n})`;
+  const saved = async (p) => { await sleep(450); return p.eval(() => JSON.parse(sessionStorage.getItem("beforeafter:v1")).anno.map((s) => s.annotations.map((a) => a.type + ":" + a.lineWidth))); };
+  const activeCard = (p) => p.eval(() => [...document.querySelectorAll(".anno-card")].findIndex((c) => c.classList.contains("active")));
+  const pointIn = async (p, n, w, h) => { await p.center(`${CARD(n)} canvas`); return p.imagePoint(`${CARD(n)} canvas`, w, h); };
+
+  const p = await t.page("#/annotator");
+  await p.setFiles(`document.getElementById("annoFile")`, [FIX("a.png"), FIX("c.png")]);
+  await p.waitFor(() => __t.count(".anno-card canvas") === 2);
+  t.check((await p.eval(() => [...document.querySelectorAll(".anno-card canvas")].every((c) => c.width > 0))), "every image is painted");
+
+  // Every image has its own toolbar, attached to it rather than to the page.
+  t.check(await p.count(".anno-card .modal-bar") === 2, "each image has a toolbar");
+  await p.eval(() => scrollTo(0, 0));
+  const barGap = () => p.eval(() => { const c = document.querySelector(".anno-card:nth-child(2)"); return c.querySelector(".modal-canvas-wrap").getBoundingClientRect().top - c.querySelector(".modal-bar").getBoundingClientRect().bottom; });
+  const barTop = () => p.eval(() => document.querySelector(".anno-card:nth-child(1) .modal-bar").getBoundingClientRect().top);
+  const top0 = await barTop();
+  await p.eval(() => scrollTo(0, 400));
+  await sleep(100);
+  t.check(await barTop() === top0 - 400, "a toolbar scrolls away with its image");
+  t.check(Math.abs(await barGap()) < 2, "a toolbar sits directly above its image");
+  const canvasTop = () => p.eval(() => [...document.querySelectorAll(".anno-card canvas")].map((c) => c.getBoundingClientRect().top + scrollY));
+  const tops = JSON.stringify(await canvasTop());
+
+  // A toolbar's button works on its own image; the first click on another image moves nothing.
+  await p.button(`${CARD(1)} .modal-bar`, "Fit");
+  t.check(await activeCard(p) === 0, "a toolbar's button makes its image active");
+  await p.eval((s) => [...document.querySelectorAll(s + " .tool")].find((b) => b.textContent.includes("Select")).click(), `${CARD(2)} .modal-bar`);
+  t.check(await activeCard(p) === 1, "another image's toolbar switches to it");
+  t.check(JSON.stringify(await canvasTop()) === tops, "switching images doesn't shift the page");
+  t.check(await p.eval(() => [...document.querySelectorAll(".anno-card .text-pop")].filter((e) => e.style.display !== "none").length) <= 1, "at most one brush palette shows");
+
+  // Clicking another image only switches to it: the tool stays armed and nothing gets drawn.
+  for (const [key, tool] of [["2", "Box"], ["3", "Arrow"], ["4", "Number"], ["5", "Text"]]) {
+    await p.key("1");
+    let pt = await pointIn(p, 1, 320, 200);
+    await p.click(pt(0.05, 0.95));
+    await p.key(key);
+    pt = await pointIn(p, 2, 400, 225);
+    await p.click(pt(0.5, 0.5));
+    t.check(await activeCard(p) === 1, `${tool}: the click switches image`);
+    t.check((await activeTool(p)).includes(tool), `${tool}: tool stays selected, got ${await activeTool(p)}`);
+    const got = JSON.stringify(await saved(p));
+    t.check(got === "[[],[]]", `${tool}: the click draws nothing, got ${got}`);
+    t.check(!(await p.eval(() => [...document.querySelectorAll(".anno-card textarea")].some((e) => e.style.display !== "none"))), `${tool}: no label editor opens`);
+  }
+  await p.key("1");
+
+  // The tool carries across images; each drawing lands on the image it was drawn on, thin by default.
+  await p.key("2");
+  let at = await pointIn(p, 2, 400, 225);
+  await p.drag(at(0.1, 0.1), at(0.5, 0.5));
+  t.check(await activeCard(p) === 1, "drawing on an image makes it active");
+  t.check(JSON.stringify(await saved(p)) === '[[],["box:small"]]', "box goes on the second image, small by default");
+  await p.key("3");
+  at = await pointIn(p, 1, 320, 200);
+  await p.drag(at(0.2, 0.2), at(0.7, 0.7));
+  t.check(await activeCard(p) === 0, "switched back to the first image");
+  t.check(JSON.stringify(await saved(p)) === '[["arrow:small"],["box:small"]]', "arrow goes on the first image, small by default");
+  await p.key("3");
+  await p.screenshot("anno-multi");
+  await p.key("1");
+
+  // Each image keeps its own history.
+  await p.key("z", 4);
+  t.check(JSON.stringify(await saved(p)) === '[[],["box:small"]]', "undo touches only the active image");
+  at = await pointIn(p, 2, 400, 225);
+  await p.click(at(0.9, 0.9));
+  await p.key("z", 4);
+  t.check(JSON.stringify(await saved(p)) === "[[],[]]", "the other image's history survived the switch");
+  await p.key("z", 4 | 8);   // ⌘⇧Z
+  t.check(JSON.stringify(await saved(p)) === '[[],["box:small"]]', "and redo");
+
+  // Each image exports on its own.
+  await p.menu(CARD(1), "⬇ Download", "SVG");
+  await p.menu(CARD(2), "⬇ Download", "SVG");
+  const [one, two] = await p.downloads(2);
+  t.check(one.name === "annotated-1.svg" && two.name === "annotated-2.svg", "exports are named per image");
+  t.check(one.text.includes('width="320"') && two.text.includes('width="400"'), "each export is its own image");
+  t.check(!one.text.includes("<rect") && two.text.includes("<rect"), "each export has only its own annotations");
+
+  // Scrolling moves down the page, until an image has been zoomed.
+  await p.viewport(500);
+  const wheel = async () => { const [x, y] = await p.point(`${CARD(1)} canvas`); await p.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y: Math.min(y, 300), deltaX: 0, deltaY: 60 }); await sleep(150); return p.eval(() => scrollY); };
+  await p.eval(() => scrollTo(0, 0));
+  t.check(await wheel() > 0, "wheel over an image scrolls the page");
+  const [zx, zy] = await p.point(`${CARD(1)} canvas`);
+  await p.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: zx, y: Math.min(zy, 300), deltaX: 0, deltaY: -40, modifiers: 2 });   // ⌃scroll zooms
+  await sleep(800);   // the previous wheel's scroll has finished
+  const zoomedAt = await p.eval(() => scrollY);
+  t.check(await wheel() === zoomedAt, "a zoomed image pans instead");
+  await p.viewport(1000);
+  await p.eval(() => scrollTo(0, 0));
+
+  // Moving to another image finishes a label in progress.
+  await p.key("5");
+  at = await pointIn(p, 1, 320, 200);
+  await p.click(at(0.5, 0.5));
+  await p.waitFor(() => __t.visible("#annoEditor textarea"));
+  await p.send("Input.insertText", { text: "Hi" });
+  at = await pointIn(p, 2, 400, 225);
+  await p.click(at(0.9, 0.9));
+  t.check(!(await p.visible("#annoEditor textarea")), "the label editor closes");
+  t.check(JSON.stringify(await saved(p)) === '[["text:undefined"],["box:small"]]', "the label stays on its own image");
+  await p.key("z", 4);
+  t.check(JSON.stringify(await saved(p)) === '[["text:undefined"],[]]', "and undo there doesn't touch it");
+  await p.key("z", 4 | 8);
+
+  // Leaving the tab and coming back keeps the images and their history.
+  await p.eval(() => document.querySelector('.tab[data-tab="ba"]').click());
+  await p.eval(() => document.querySelector('.tab[data-tab="anno"]').click());
+  await p.waitFor(() => __t.count(".anno-card.active") === 1);
+  t.check(await activeCard(p) === 1, "the same image is still active");
+  await p.key("z", 4);
+  t.check(JSON.stringify(await saved(p)) === '[["text:undefined"],[]]', "undo still works after returning");
+  await p.key("z", 4 | 8);
+  at = await pointIn(p, 1, 320, 200);
+  await p.click(at(0.05, 0.95));
+  await p.key("z", 4);
+  t.check(JSON.stringify(await saved(p)) === '[[],["box:small"]]', "as it does on the other image");
+
+  // Session restore keeps them all; removing goes down to one, then back to the drop page.
+  await p.reload();
+  await p.waitFor(() => __t.count(".anno-card canvas") === 2);
+  t.check(JSON.stringify(await saved(p)) === '[[],["box:small"]]', "session restores every image");
+  await p.button(CARD(1), "Remove");
+  t.check(await p.count(".anno-card") === 1, "Remove drops that image");
+  const afterRemove = JSON.stringify(await saved(p));
+  t.check(afterRemove === '[["box:small"]]', "and keeps the other's annotations, got " + afterRemove);
+  await p.menu(CARD(1), "⬇ Download", "SVG");
+  t.check((await p.downloads(1))[0].name === "annotated.svg", "a lone image exports without a number");
+  await p.button(CARD(1), "Remove");
+  t.check(await p.visible("#annoDrop") && !(await p.visible("#annoEditor")), "removing the last image shows the drop page");
+  await p.setFiles(`document.getElementById("annoFile")`, FIX("b.png"));
+  await p.waitFor(() => __t.count(".anno-card") === 1 && __t.visible(".anno-card canvas"));
+  t.check((await p.count(".anno-card.active")) === 1, "can start over afterwards");
+  await p.key("2");
+  const lone = await p.imagePoint(`${CARD(1)} canvas`, 200, 300);
+  await p.click(lone(0.5, 0.5));
+  t.check(JSON.stringify(await saved(p)) === "[[]]", "clicking without dragging leaves no empty box");
 });
 
 test("annotator: modal editing commits on Done and discards on Escape", async (t) => {

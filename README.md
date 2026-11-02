@@ -25,11 +25,11 @@ Each tool has its own URL via hash routing, so you can deep-link or share a link
 
 ## Annotator
 
-- Drop (anywhere on the page) / paste / browse a single image and annotate it on a **pan/zoom infinite canvas** (scroll to pan, ⌃scroll / pinch to zoom).
+- Drop (anywhere on the page) / paste / browse **one or several images** and annotate them together: they stack on the page, each with its own toolbar and **pan/zoom infinite canvas**, and your current tool and brush carry between them (scroll to pan, ⌃scroll / pinch to zoom; with several images, scrolling moves down the page until you zoom one).
 - Tools: **box, arrow, numbered marker, multi-line text label**, with a color palette.
 - Arrows **pin** to boxes, labels and numbers and follow them when moved; drag handles to spin off linked arrows/labels.
 - Marquee multi-select, move/resize, undo/redo, and keyboard shortcuts (1–5 for tools, ⌘Z to undo, …). Annotate outside the image and the export grows to fit.
-- Export the annotated image as PNG/JPEG/WebP/SVG, or copy it.
+- Each image has its own **Copy** and **Download** buttons (PNG/JPEG/WebP/SVG), plus Replace and Remove.
 
 The annotation editor is shared across all three tools — in Before/After and Tutorial, click an image (or its **Annotate** button) to open the same editor in a modal.
 
